@@ -3,39 +3,33 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Hoangzii – Trang tổng</title>
+<title>Cross Fire Everything</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  :root{--bg:#0f1115;--card:#1a1d24;--line:#2a2f3a;--text:#e8eaf0;--mute:#9aa1b2;--acc:#4da3ff}
+  :root{--bg:#f5f5f5;--card:#fff;--tx:#111;--head:#0a2540;--pill:#eaf4ff;--pill-line:#b9dcf7;--pill-tx:#12324a;--pill-hover:#d6ebff;--accent:#0078d4;--dev-tx:#888;--dev-bg:#f4f4f4;--dev-line:#c8d6e2;--shadow:0 6px 24px rgba(0,0,0,.08)}
+  @media(prefers-color-scheme:dark){:root{--bg:#141414;--card:#1f1f1f;--tx:#eee;--head:#e8f1ff;--pill:#1d3552;--pill-line:#2f5b8a;--pill-tx:#e6f1ff;--pill-hover:#274a73;--accent:#4da3ff;--dev-tx:#8a8a8a;--dev-bg:#242424;--dev-line:#3a4a5a;--shadow:0 6px 24px rgba(0,0,0,.5)}}
   *{box-sizing:border-box}
-  body{margin:0;min-height:100vh;background:var(--bg);color:var(--text);font-family:'Lexend',system-ui,sans-serif;padding:48px 20px}
-  .wrap{max-width:960px;margin:0 auto}
-  h1{font-weight:600;font-size:28px;margin:0 0 6px}
-  p.sub{color:var(--mute);margin:0 0 32px;font-weight:300}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px}
-  a.card{display:block;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;color:inherit;text-decoration:none;transition:.15s}
-  a.card:hover{border-color:var(--acc);transform:translateY(-2px)}
-  a.card b{display:block;font-size:18px;font-weight:500;margin-bottom:6px}
-  a.card span{color:var(--mute);font-size:14px;font-weight:300}
+  body{margin:0;min-height:100vh;background:var(--bg);color:var(--tx);font-family:'Lexend',system-ui,sans-serif;padding:36px 16px 60px}
+  h1{text-align:center;font-size:28px;font-weight:700;margin:0 0 34px}
+  h2{text-align:center;font-size:22px;font-weight:600;color:var(--head);margin:0}
+  .bar{width:56px;height:3px;background:var(--accent);margin:10px auto 22px;border-radius:2px}
+  .card{max-width:900px;margin:0 auto;background:var(--card);border-radius:24px;box-shadow:var(--shadow);padding:34px 28px;display:flex;flex-wrap:wrap;gap:14px;justify-content:center}
+  a.pill{display:inline-block;padding:12px 22px;background:var(--pill);border:1px solid var(--pill-line);border-radius:14px;color:var(--pill-tx);font-weight:600;font-size:16px;text-decoration:none;transition:.15s}
+  a.pill:hover{background:var(--pill-hover);border-color:var(--accent);transform:translateY(-2px)}
+  .dev{display:inline-block;padding:12px 22px;background:var(--dev-bg);border:1px dashed var(--dev-line);border-radius:14px;color:var(--dev-tx);font-weight:600;font-size:16px}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>Hoangzii</h1>
-  <p class="sub">Tổng hợp các trang</p>
-  <div class="grid">
-    <!-- Thêm trang mới: copy nguyên 1 khối <a> dưới đây, đổi href, tiêu đề và mô tả -->
-    <a class="card" href="/skin/">
-      <b>Weapon Skin Guide</b>
-      <span>Danh sách skin vũ khí CrossFire</span>
-    </a>
-    <a class="card" href="/weapon/">
-      <b>Weapon Guide</b>
-      <span>Danh sách vũ khí và tên theo khu vực</span>
-    </a>
+  <h1>Cross Fire Everything</h1>
+  <h2>MENU</h2>
+  <div class="bar"></div>
+  <div class="card">
+    <!-- Thêm trang mới: copy nguyên 1 dòng <a class="pill"> rồi đổi href và tên -->
+    <a class="pill" href="/skin/">Skin</a>
+    <a class="pill" href="/weapon/">Weapon Guide</a>
+    <span class="dev">More features are in development..</span>
   </div>
-</div>
 </body>
 </html>
