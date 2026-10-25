@@ -31,12 +31,12 @@ label.chk{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
 .item .pic{height:100px;width:100%;display:flex;align-items:center;justify-content:center}
 .item img.w{max-width:100%;max-height:100px;object-fit:contain}
 .item .noimg{font-size:11px;color:var(--sub)}
-.tgl{display:none;gap:6px;justify-content:center;margin:2px 0 4px}
-.tgl button{font-size:9px;line-height:1;padding:4px 10px;border:1px solid var(--accent);border-radius:4px;background:var(--card);color:var(--accent);cursor:pointer}
+.tgl{display:flex;gap:6px;justify-content:center;align-items:center;margin:auto -8px 0;width:calc(100% + 16px);min-height:34px;padding:6px 4px 2px;background:var(--label)}   /* dải xanh dưới hình: luôn có (kể cả không có nút) để mọi thẻ giống nhau */
+.tgl button{font-size:9px;line-height:1;padding:5px 10px;border:1px solid var(--accent);border-radius:4px;background:var(--card);color:var(--accent);cursor:pointer}
 .tgl button.on{background:var(--accent);color:#fff}
 .badges{position:absolute;left:8px;top:88px;display:flex;gap:4px;margin:0;min-height:0;z-index:1}   /* cố định góc dưới-trái vùng hình (top = 10px padding + 100px hình - 22px) */
 .badges img{width:20px;height:20px;object-fit:contain}
-.name{margin-top:auto;width:calc(100% + 16px);background:var(--label);color:var(--label-tx);text-align:center;font-size:9px;font-weight:600;padding:5px 4px;line-height:1.25}
+.name{margin-top:0;width:calc(100% + 16px);background:var(--label);color:var(--label-tx);text-align:center;font-size:11px;font-weight:600;padding:4px 6px 8px;line-height:1.3}
 .pager{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;font-size:13px;margin-top:10px}
 .pager input{width:64px}
 .pager .on{background:var(--accent);color:#fff;border-color:var(--accent)}
@@ -45,6 +45,9 @@ label.chk{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
 #tip tr.rm td{color:#9a9a9a;text-decoration:line-through}
 #tip s{text-decoration:line-through}
 .name s{text-decoration:line-through}
+/* thẻ KHÔNG có nút: bỏ dải rỗng, khối xanh dưới hình cao bằng thẻ có nút; tên nằm chính giữa (ngang + dọc), cùng cỡ chữ/nền */
+.tgl:empty{display:none}
+.item:has(.tgl:empty) .name{margin-top:auto;min-height:62px;display:flex;align-items:center;justify-content:center;padding:6px}
 /* ô tìm kiếm WEAPON LIST */
 .cb{position:relative;flex:1 1 0;min-width:0}
 .cb input{width:100%;padding-right:24px}
@@ -133,7 +136,8 @@ const CFG = {
     // { tokens:['_A','_B','_C'],         labels:['Một','Hai','Ba'] },     // 3 nút
   ],
   CLOSED_REGIONS: ['Russia','Indonesia','Korea','Español','Europe','SEA','Japan','Taiwan'],   // khu vực đã ngừng hoạt động: mọi dữ liệu của cột này bị gạch ngang + xám. Hoặc ghi "Russia (Removed)" ngay tiêu đề cột trong Sheet.
-  REMOVED_WORDS: ['Removed'],   // từ đánh dấu ngừng hoạt động trong ô khu vực (thêm từ khác nếu cần, vd 'Đã gỡ')
+  CLOSED_FROM: 14,   // chỉ tiêu đề cột O (=14) trở đi (O–V) mà bị gạch ngang trong Sheet mới tính là khu vực đóng "(Closed)"
+  REMOVED_WORDS: ['Removed','Closed'],   // từ đánh dấu ngừng hoạt động trong ô khu vực (thêm từ khác nếu cần, vd 'Đã gỡ')
   PER_PAGE: 24,
   // Khoá Google Sheets API (miễn phí) - CHỈ cần nếu muốn web nhận định dạng GẠCH NGANG thật của ô trong Sheet (cột J–V).
   // Để trống '' thì web chỉ nhận chữ gạch ngang kiểu Unicode (R̶u̶s̶s̶i̶a̶) và chữ "Removed". Xem hướng dẫn tạo khoá trong tin nhắn.
@@ -197,7 +201,7 @@ async function loadStrikes(refs){
 function applyStrikes(rows,api){
   if(!api)return null;
   const hs=new Set(),h0=(api[0]&&api[0].values)||[];
-  for(let i=CFG.COL.regionFrom;i<=CFG.COL.regionTo;i++)if(cellSegs(h0[i]))hs.add(i);   // dòng 1 = tiêu đề: cột nào gạch ngang = khu vực đã đóng
+  for(let i=CFG.CLOSED_FROM;i<=CFG.COL.regionTo;i++)if(cellSegs(h0[i]))hs.add(i);   // dòng 1 = tiêu đề: cột nào gạch ngang = khu vực đã đóng
   const C=CFG.COL,fv=c=>c&&c.formattedValue!=null?String(c.formattedValue).trim():'';
   const q=new Map();
   api.forEach((rw,i)=>{if(!i)return;const v=rw.values||[],k=fv(v[C.name])+'\u0001'+fv(v[C.image]);if(!q.has(k))q.set(k,[]);q.get(k).push(v)});
@@ -560,7 +564,7 @@ function buildFilters(){
   });
   // Khu vực
   const sr=document.createElement('select');sr.id='fRegion';
-  sr.innerHTML='<option value="-1">All regions</option>'+REGIONS.map((r,i)=>`<option value="${i}"${r.closed?' style="color:#999"':''}>${esc(r.name)}${r.closed?' (Removed)':''}</option>`).join('');
+  sr.innerHTML='<option value="-1">All regions</option>'+REGIONS.map((r,i)=>`<option value="${i}"${r.closed?' style="color:#999"':''}>${esc(r.name)}${r.closed?' (Closed)':''}</option>`).join('');
   sr.onchange=()=>{F.region=+sr.value;state.page=1;render()};box.appendChild(sr);
   const lb=document.createElement('label');lb.className='chk';
   lb.innerHTML='<input type="checkbox" id="fUnique"> Unique to the region';
