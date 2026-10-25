@@ -14,6 +14,7 @@
 *{box-sizing:border-box}
 body{margin:0;font-family:'Lexend',system-ui,sans-serif;background:var(--bg);color:var(--tx);padding:20px 16px 40px}
 h1{text-align:center;margin:6px 0 2px;font-size:26px;font-weight:700}
+.ver:empty{display:none}
 .ver{text-align:center;color:var(--sub);font-size:13px;margin-bottom:14px}
 .bar{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:10px auto;max-width:1300px}
 .bar input[type=text]{width:min(420px,100%);padding:8px 12px}
@@ -534,7 +535,7 @@ $('btnReset').onclick=resetAll;
     const seen=new Set();
     const items=ok.flatMap(x=>x.rows.map(r=>({r,tab:x.tab}))).filter(({r,tab})=>{const k=tab+'\u0001'+r.join('\u0001');if(seen.has(k))return false;seen.add(k);return true});
     build(ok[0].headers,items);
-    $('ver').textContent='Dữ liệu trực tiếp từ Google Sheets · '+ok.length+' tab · '+ROWS.length+' skin · F5 để cập nhật'+(bad.length?' · Không thấy tab: '+bad.join(', '):'');
+    $('ver').textContent=(bad.length?'Không thấy tab: '+bad.join(', '):'');   // bình thường để trống; chỉ hiện khi có cảnh báo
   }catch(err){
     $('ver').textContent='';$('msg').textContent=err.message;$('msg').className='err';return;
   }
