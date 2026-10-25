@@ -14,7 +14,6 @@
 *{box-sizing:border-box}
 body{margin:0;font-family:'Lexend',system-ui,sans-serif;background:var(--bg);color:var(--tx);padding:20px 16px 40px}
 h1{text-align:center;margin:6px 0 2px;font-size:26px;font-weight:700}
-.ver:empty{display:none}
 .ver{text-align:center;color:var(--sub);font-size:13px;margin-bottom:14px}
 .bar{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:10px auto;max-width:1300px}
 .bar input[type=text]{width:min(420px,100%);padding:8px 12px}
@@ -26,7 +25,7 @@ label.chk{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
 #filters{flex-wrap:nowrap;overflow-x:auto;max-width:1600px;justify-content:stretch;align-items:center}
 #filters select{flex:1 1 0;min-width:0;max-width:none}
 #filters label.chk{flex:none;white-space:nowrap}
-.grid{--gap:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(max(120px,calc((100% - 5*var(--gap))/6)),1fr));gap:var(--gap);max-width:1600px;margin:1cm auto}
+.grid{--gap:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(max(120px,calc((100% - 5*var(--gap))/6)),1fr));gap:var(--gap);max-width:1600px;margin:18px auto}
 .item{background:var(--card);border-top:3px solid var(--label);border-radius:2px;padding:10px 8px 0;display:flex;flex-direction:column;align-items:center;min-height:124px;position:relative;box-shadow:0 1px 3px rgba(0,0,0,.08);transition:transform .12s,box-shadow .12s}
 .item:hover{transform:translateY(-2px);box-shadow:0 4px 10px rgba(0,0,0,.18);border-top-color:var(--accent)}
 .item .pic{height:100px;width:100%;display:flex;align-items:center;justify-content:center}
@@ -691,7 +690,7 @@ function dataJsFallback(){
     const seen=new Set();                               // bỏ dòng trùng hệt nhau (phòng khi 1 tab bị đọc 2 lần)
     const allRows=ok.flatMap(x=>x.rows).filter(r=>{const k=r.join('\u0001');if(seen.has(k))return false;seen.add(k);return true});
     build(ok[0].headers,allRows);                       // gộp mọi tab, tiêu đề lấy từ tab đầu tiên
-    $('ver').textContent=((bad.length?'KHÔNG đọc được tab: '+bad.join(', '):'')+stNote).replace(/^ · /,'');   // bình thường để trống; chỉ hiện khi có cảnh báo
+    $('ver').textContent='Dữ liệu trực tiếp từ Google Sheets · '+ok.length+' tab · '+ROWS.length+' vũ khí · F5 để cập nhật'+(bad.length?' · KHÔNG đọc được tab: '+bad.join(', '):'')+stNote;
   }catch(err){
     const fb=dataJsFallback();
     if(fb){build(fb.headers,fb.rows);$('ver').textContent='Đang dùng dữ liệu dự phòng từ data.js ('+err.message+')'}
