@@ -257,9 +257,15 @@ function fallbackImg(img){
   }
 }
 window.__fb=fallbackImg;
+/* ===== Khớp tên file KHÔNG phân biệt hoa/thường (Cloudflare phân biệt, Windows thì không) =====
+   manifest.json do build-manifest.js tự tạo khi Cloudflare build: { "đường/dẫn/viết/thường": "Đường/Dẫn/Thật" } */
+let MAN={};
+const FIXU=u=>{try{const k=decodeURIComponent(u).toLowerCase();return MAN[k]||u}catch(e){return u}};
+const FIXL=l=>[...new Set(l.map(FIXU))];
+async function loadManifest(){try{const r=await fetch('manifest.json?_='+Date.now());if(r.ok)MAN=await r.json()}catch(e){}}
 function imgTag(list,cls,alt){
   if(!list.length) return '';
-  const [first,...rest]=list;
+  const [first,...rest]=FIXL(list);
   return `<img class="${cls}" src="${esc(first)}" alt="${esc(alt)}" loading="lazy" data-alts='${esc(JSON.stringify(rest))}' onerror="__fb(this)">`;
 }
 
@@ -347,7 +353,7 @@ $('grid').addEventListener('click',e=>{
   const img=it.querySelector('img.w');
   const vi=variantInfo(ROWS[+it.dataset.i]);
   if(!vi||!img)return;
-  const list=weaponSrcList(vi.bases[+b.dataset.j],ROWS[+it.dataset.i]);
+  const list=FIXL(weaponSrcList(vi.bases[+b.dataset.j],ROWS[+it.dataset.i]));
   img.dataset.alts=JSON.stringify(list.slice(1));
   img.src=list[0];
   it.querySelectorAll('.tgl button').forEach(x=>x.classList.toggle('on',x===b));
@@ -488,6 +494,7 @@ function dataJsFallback(){
 }
 (async function init(){
   try{
+    await loadManifest();
     let refs=[];
     if(CFG.TAB_LIST){                                   // đọc danh sách tab từ tab "TABS" (nếu có)
       try{

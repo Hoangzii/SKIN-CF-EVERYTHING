@@ -346,9 +346,15 @@ window.__ok=img=>{
   const k=img.dataset.k;if(!k||dirOK[k])return;                // ghi nhớ thư mục tìm thấy hình vũ khí
   dirOK[k]=s.slice(0,s.lastIndexOf('/')+1);
 };
+/* ===== Khớp tên file KHÔNG phân biệt hoa/thường (Cloudflare phân biệt, Windows thì không) =====
+   manifest.json do build-manifest.js tự tạo khi Cloudflare build: { "đường/dẫn/viết/thường": "Đường/Dẫn/Thật" } */
+let MAN={};
+const FIXU=u=>{try{const k=decodeURIComponent(u).toLowerCase();return MAN[k]||u}catch(e){return u}};
+const FIXL=l=>[...new Set(l.map(FIXU))];
+async function loadManifest(){try{const r=await fetch('manifest.json?_='+Date.now());if(r.ok)MAN=await r.json()}catch(e){}}
 function imgTag(list,cls,alt,k){
   if(!list.length)return '';
-  const [first,...rest]=list;
+  const [first,...rest]=FIXL(list);
   return `<img class="${cls}" src="${esc(first)}" alt="${esc(alt)}" loading="lazy"${k?` data-k="${esc(k)}"`:''} onload="__ok(this)" data-alts='${esc(JSON.stringify(rest))}' onerror="__fb(this)">`;
 }
 
@@ -499,6 +505,7 @@ $('btnReset').onclick=resetAll;
 
 (async function init(){
   try{
+    await loadManifest();
     let refs=[];
     if(CFG.TAB_LIST){                                   // đọc danh sách tab từ tab "TABS" (nếu có)
       try{
