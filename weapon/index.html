@@ -14,6 +14,7 @@
 *{box-sizing:border-box}
 body{margin:0;font-family:'Lexend',system-ui,sans-serif;background:var(--bg);color:var(--tx);padding:20px 16px 40px}
 h1{text-align:center;margin:6px 0 2px;font-size:26px;font-weight:700}
+.ver:empty{display:none}
 .ver{text-align:center;color:var(--sub);font-size:13px;margin-bottom:14px}
 .bar{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:10px auto;max-width:1300px}
 .bar input[type=text]{width:min(420px,100%);padding:8px 12px}
@@ -690,7 +691,7 @@ function dataJsFallback(){
     const seen=new Set();                               // bỏ dòng trùng hệt nhau (phòng khi 1 tab bị đọc 2 lần)
     const allRows=ok.flatMap(x=>x.rows).filter(r=>{const k=r.join('\u0001');if(seen.has(k))return false;seen.add(k);return true});
     build(ok[0].headers,allRows);                       // gộp mọi tab, tiêu đề lấy từ tab đầu tiên
-    $('ver').textContent='Dữ liệu trực tiếp từ Google Sheets · '+ok.length+' tab · '+ROWS.length+' vũ khí · F5 để cập nhật'+(bad.length?' · KHÔNG đọc được tab: '+bad.join(', '):'')+stNote;
+    $('ver').textContent=((bad.length?'KHÔNG đọc được tab: '+bad.join(', '):'')+stNote).replace(/^ · /,'');   // bình thường để trống; chỉ hiện khi có cảnh báo
   }catch(err){
     const fb=dataJsFallback();
     if(fb){build(fb.headers,fb.rows);$('ver').textContent='Đang dùng dữ liệu dự phòng từ data.js ('+err.message+')'}
