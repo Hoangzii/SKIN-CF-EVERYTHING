@@ -43,7 +43,17 @@ label.chk{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
 #tip{position:fixed;z-index:50;pointer-events:none;background:rgba(40,40,40,.94);color:#fff;border-radius:6px;padding:10px 14px;font-size:12.5px;line-height:1.7;display:none;max-width:420px}
 #tip table{border-collapse:collapse}
 #tip tr.rm td{color:#9a9a9a;text-decoration:line-through}
-#tip .tip-ids{color:#fbdf89;font-weight:700;margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid rgba(251,223,137,.35);word-break:break-all}
+#tip s{text-decoration:line-through}
+.name s{text-decoration:line-through}
+/* ô tìm kiếm WEAPON LIST */
+.cb{position:relative;flex:1 1 0;min-width:0}
+.cb input{width:100%;padding-right:24px}
+.cb .cbx{position:absolute;right:7px;top:50%;transform:translateY(-50%);cursor:pointer;color:var(--sub);display:none;font-size:17px;line-height:1}
+.cb.has .cbx{display:block}
+.cbl{position:fixed;z-index:60;display:none;max-height:320px;overflow-y:auto;background:var(--card);color:var(--tx);border:1px solid var(--line);border-radius:4px;box-shadow:0 4px 14px rgba(0,0,0,.25);font-size:13px}
+.cbl div{padding:6px 10px;cursor:pointer;white-space:nowrap}
+.cbl div.act,.cbl div[data-i]:hover{background:var(--accent);color:#fff}
+.cbl div.none{color:var(--sub);cursor:default}
 #tip td{vertical-align:top;padding:0 0 0 0}
 #tip td:first-child{text-align:right;font-weight:700;padding-right:14px;white-space:nowrap}
 #msg{text-align:center;color:var(--sub);padding:30px;font-size:14px}
@@ -65,6 +75,7 @@ label.chk{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
 <div class="grid" id="grid"></div>
 <div class="pager" id="pager"></div>
 <div id="tip"></div>
+<div class="cbl" id="cbl"></div>
 
 <!-- data.js: giữ nguyên, không chỉnh sửa. Nếu file có khai báo SHEET_ID / SHEET_GID thì sẽ được dùng; nếu có mảng dữ liệu thì dùng làm dự phòng khi không tải được Sheet. -->
 <script src="data.js" onerror="void 0"></script>
@@ -123,7 +134,10 @@ const CFG = {
   ],
   CLOSED_REGIONS: ['Russia','Indonesia','Korea','Español','Europe','SEA','Japan','Taiwan'],   // khu vực đã ngừng hoạt động: mọi dữ liệu của cột này bị gạch ngang + xám. Hoặc ghi "Russia (Removed)" ngay tiêu đề cột trong Sheet.
   REMOVED_WORDS: ['Removed'],   // từ đánh dấu ngừng hoạt động trong ô khu vực (thêm từ khác nếu cần, vd 'Đã gỡ')
-  PER_PAGE: 24
+  PER_PAGE: 24,
+  // Khoá Google Sheets API (miễn phí) - CHỈ cần nếu muốn web nhận định dạng GẠCH NGANG thật của ô trong Sheet (cột J–V).
+  // Để trống '' thì web chỉ nhận chữ gạch ngang kiểu Unicode (R̶u̶s̶s̶i̶a̶) và chữ "Removed". Xem hướng dẫn tạo khoá trong tin nhắn.
+  API_KEY: ''
 };
 
 /* ================= TẢI SHEET (JSONP, chạy được cả file:// ) ================= */
@@ -149,8 +163,56 @@ function parseTable(t){
   return {headers,rows};
 }
 
+/* ===== Đọc định dạng gạch ngang thật bằng Google Sheets API (gviz không trả về định dạng) ===== */
+function cellSegs(c){
+  if(!c||c.formattedValue==null||c.formattedValue==='')return null;
+  const t=String(c.formattedValue),tf=c.effectiveFormat&&c.effectiveFormat.textFormat;
+  const whole=!!(tf&&tf.strikethrough),runs=c.textFormatRuns;
+  if(!runs||!runs.length)return normSegs([{t,s:whole}]);
+  const a=[];
+  if((runs[0].startIndex||0)>0)a.push({t:t.slice(0,runs[0].startIndex),s:whole});
+  runs.forEach((ru,i)=>{
+    const b=i+1<runs.length?(runs[i+1].startIndex||0):t.length;
+    const f=ru.format&&ru.format.strikethrough;
+    a.push({t:t.slice(ru.startIndex||0,b),s:f!=null?!!f:whole});
+  });
+  return normSegs(a);
+}
+async function loadStrikes(refs){
+  const base='https://sheets.googleapis.com/v4/spreadsheets/'+CFG.SHEET_ID,key='key='+encodeURIComponent(CFG.API_KEY);
+  const j=async u=>{const r=await fetch(u),d=await r.json();if(d.error)throw new Error(d.error.message);return d};
+  const meta=await j(base+'?fields=sheets.properties(sheetId,title)&'+key);
+  const props=meta.sheets.map(s=>s.properties);
+  const titles=refs.map(ref=>{ref=String(ref).trim();const p=/^\d+$/.test(ref)?props.find(x=>String(x.sheetId)===ref):props.find(x=>x.title.toLowerCase()===ref.toLowerCase());return p?p.title:null});
+  const want=[...new Set(titles.filter(Boolean))];
+  if(!want.length)return refs.map(()=>null);
+  const last=String.fromCharCode(65+CFG.COL.regionTo);
+  const ranges=want.map(t=>'ranges='+encodeURIComponent("'"+t.replace(/'/g,"''")+"'!A:"+last)).join('&');
+  const fields='sheets(properties(title),data(rowData(values(formattedValue,effectiveFormat(textFormat(strikethrough)),textFormatRuns))))';
+  const d=await j(base+'?includeGridData=true&'+ranges+'&fields='+encodeURIComponent(fields)+'&'+key);
+  const byTitle={};
+  d.sheets.forEach(s=>{byTitle[s.properties.title]=(s.data&&s.data[0]&&s.data[0].rowData)||[]});
+  return titles.map(t=>t?byTitle[t]||null:null);
+}
+function applyStrikes(rows,api){
+  if(!api)return null;
+  const hs=new Set(),h0=(api[0]&&api[0].values)||[];
+  for(let i=CFG.COL.regionFrom;i<=CFG.COL.regionTo;i++)if(cellSegs(h0[i]))hs.add(i);   // dòng 1 = tiêu đề: cột nào gạch ngang = khu vực đã đóng
+  const C=CFG.COL,fv=c=>c&&c.formattedValue!=null?String(c.formattedValue).trim():'';
+  const q=new Map();
+  api.forEach((rw,i)=>{if(!i)return;const v=rw.values||[],k=fv(v[C.name])+'\u0001'+fv(v[C.image]);if(!q.has(k))q.set(k,[]);q.get(k).push(v)});
+  rows.forEach(r=>{                                   // ghép dòng theo (cột A + cột B), theo thứ tự xuất hiện
+    const l=q.get(r[C.name]+'\u0001'+r[C.image]);if(!l||!l.length)return;
+    const v=l.shift(),st={};
+    for(let i=C.regionFrom;i<=C.regionTo;i++){const sg=cellSegs(v[i]);if(sg)st[i]=sg}
+    r.strike=st;
+  });
+  return hs;
+}
+
 /* ================= DỮ LIỆU ================= */
 let H=[],ROWS=[],ALLROWS=[],REGIONS=[],state={page:1,per:CFG.PER_PAGE};
+let HDR_STRIKE=null;   // tập chỉ số cột khu vực có TIÊU ĐỀ bị gạch ngang trong Sheet (null = chưa đọc được -> dùng CFG.CLOSED_REGIONS)
 const F={}; // giá trị bộ lọc
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
@@ -170,21 +232,57 @@ function parseReg(v,name){
   }
   return {text:t,removed};
 }
+/* ===== Chữ GẠCH NGANG ở cột khu vực (J–V) =====
+   Nguồn 1: định dạng gạch ngang thật trong Google Sheets (đọc qua Sheets API, cần CFG.API_KEY) -> r.strike[cột] = các đoạn {t,s}
+   Nguồn 2: chữ gạch ngang kiểu Unicode (ký tự + U+0336 / U+0335) dán thẳng vào ô */
+function normSegs(a){
+  const o=[];
+  a.forEach(x=>{if(!x.t)return;const l=o[o.length-1];if(l&&l.s===x.s)l.t+=x.t;else o.push({t:x.t,s:x.s})});
+  if(!o.length)return null;
+  o[0].t=o[0].t.replace(/^\s+/,'');o[o.length-1].t=o[o.length-1].t.replace(/\s+$/,'');
+  const r=o.filter(x=>x.t);
+  return r.some(x=>x.s)?r:null;
+}
+function uniSegs(v){
+  const a=[];
+  for(const ch of [...v]){
+    if(ch==='\u0335'||ch==='\u0336'){if(a.length)a[a.length-1].s=true;continue}
+    a.push({t:ch,s:false});
+  }
+  return {t:a.map(x=>x.t).join(''),sg:normSegs(a)};
+}
+function regCell(r,i){
+  let v=String(r[i]||''),sg=(r.strike&&r.strike[i])||null;
+  if(/[\u0335\u0336]/.test(v)){const u=uniSegs(v);v=u.t;if(!sg)sg=u.sg}
+  return {v,sg};
+}
+const segHTML=sg=>sg.map(x=>x.s?`<s>${esc(x.t)}</s>`:esc(x.t)).join('');
+const regHTML=(r,i)=>{const sg=r.segs&&r.segs[i];return sg?segHTML(sg):esc((r.disp&&r.disp[i])||r.reg[i])};
+
 function build(headers,rows){
   H=headers;
   const C=CFG.COL;
   REGIONS=[];
   for(let i=C.regionFrom;i<=C.regionTo&&i<headers.length;i++) {
-    const raw=headers[i]||('Region '+(i-C.regionFrom+1)),ph=parseReg(raw,'');
+    let raw=headers[i]||('Region '+(i-C.regionFrom+1));
+    const uni=/[\u0335\u0336]/.test(raw);if(uni)raw=uniSegs(raw).t;      // tiêu đề gạch ngang kiểu Unicode
+    const ph=parseReg(raw,'');
     const name=ph.removed?(ph.text||raw):raw;
-    REGIONS.push({idx:i,name,closed:ph.removed||CFG.CLOSED_REGIONS.some(w=>w.toLowerCase()===name.trim().toLowerCase())});
+    const byList=CFG.CLOSED_REGIONS.some(w=>w.toLowerCase()===name.trim().toLowerCase());
+    // đóng cửa = tiêu đề cột bị gạch ngang trong Sheet (nếu đọc được), hoặc ghi "Removed"; chưa đọc được định dạng thì dùng danh sách CLOSED_REGIONS
+    REGIONS.push({idx:i,name,closed:ph.removed||uni||(HDR_STRIKE?HDR_STRIKE.has(i):byList)});
   }
   ROWS=rows.filter(r=>r[C.name]||r[C.image]).map(r=>({
     raw:r,
     name:r[C.name],
     ...(x=>({imgs:x,img:x[0]||''}))((r[C.image]||'').split(/[,;\n|]+/).map(t=>t.trim()).filter(Boolean)),
     badges:(r[C.badges]||'').split(/[,;\n|]+/).map(x=>x.trim()).filter(Boolean),
-    ...(p=>({reg:p.map(x=>x.text),disp:p.map(x=>x.disp),rm:p.map((x,k)=>x.removed||(REGIONS[k].closed&&!!x.text))}))(REGIONS.map(g=>parseReg(r[g.idx],r[C.name])))
+    ...(rc=>{
+      const p=rc.map(c=>parseReg(c.v,r[C.name]));
+      const segs=rc.map((c,k)=>c.sg&&c.sg.map(x=>x.t).join('')===p[k].text?c.sg:null);   // chỉ dùng khi chữ khớp hoàn toàn
+      return {reg:p.map(x=>x.text),disp:p.map(x=>x.disp),segs,
+        rm:p.map((x,k)=>x.removed||(REGIONS[k].closed&&!!x.text)||!!(segs[k]&&segs[k].every(z=>z.s)))};   // gạch ngang toàn ô => xám + gạch
+    })(REGIONS.map(g=>regCell(r,g.idx)))
   }));
   ALLROWS=ROWS;
   ROWS=mergeGroups(ROWS);
@@ -299,6 +397,11 @@ function titleOf(row){
   const reg=F.region==null?-1:F.region;
   return (reg>=0&&row.reg[reg])||row.name;
 }
+function titleHTML(row){
+  const reg=F.region==null?-1:F.region;
+  if(reg>=0&&row.reg[reg]){const sg=row.segs&&row.segs[reg];return sg?segHTML(sg):esc(row.reg[reg])}
+  return esc(row.name);
+}
 function buildEntries(list){
   const mrules=CFG.VARIANT_RULES.map((ru,ri)=>({ru,ri})).filter(x=>x.ru.merge);
   if(!mrules.length)return list.map(row=>({row}));
@@ -346,7 +449,7 @@ $('grid').addEventListener('click',e=>{
     const row=m.row,title=titleOf(row);
     it.dataset.i=ROWS.indexOf(row);it.classList.toggle('rm',removedIn(row));
     it.querySelector('.pic').innerHTML=imgTag(weaponSrcList(row.img,row),'w',title)||'<div class="noimg">(no image)</div>';
-    it.querySelector('.name').textContent=title;
+    it.querySelector('.name').innerHTML=titleHTML(row);
     it.querySelector('.badges').innerHTML=row.badges.map(x=>imgTag(badgeSrcList(x),'b',x)).join('');
     it.querySelectorAll('.tgl button').forEach(x=>x.classList.toggle('on',x===b));
     return;
@@ -377,16 +480,79 @@ function optionsFor(gi,level){
 function fillSelect(sel,label,opts,cur){
   sel.innerHTML=`<option value="">${esc(label)} </option>`+opts.map(o=>`<option value="${esc(o)}"${o===cur?' selected':''}>${esc(o)}</option>`).join('');
 }
+/* ===== Ô tìm kiếm thay cho danh sách WEAPON LIST: gõ nhiều từ khoá (không phân biệt hoa/thường, dấu, khoảng trắng/gạch) =====
+   Gõ tới đâu lọc lưới tới đó; bấm 1 gợi ý (hoặc ↑↓ + Enter) để chọn chính xác tên đó; dấu × để xoá. */
+const cbl=$('cbl');let cbOwner=null,cbPick=null,cbShown=[];
+const nz=x=>String(x||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/gi,'d').toLowerCase();
+const cp=x=>nz(x).replace(/[\s\-_.]+/g,'');
+function kwMatch(text,kw){
+  const n=nz(text),c=cp(text);
+  return nz(kw).split(/\s+/).filter(Boolean).every(w=>n.includes(w)||c.includes(cp(w)));
+}
+const cbHide=()=>{cbl.style.display='none';cbOwner=null};
+addEventListener('scroll',e=>{if(cbOwner&&e.target!==cbl)cbHide()},true);
+addEventListener('resize',cbHide);
+cbl.addEventListener('mousedown',e=>{
+  e.preventDefault();
+  const d=e.target.closest('[data-i]');
+  if(d&&cbPick)cbPick(cbShown[+d.dataset.i]);
+});
+function makeCombo(gi,g,lv,col){
+  const key=g.key+lv,wrap=document.createElement('div');
+  wrap.className='cb';
+  wrap.innerHTML='<input type="text" autocomplete="off" spellcheck="false"><span class="cbx" title="Xoá">×</span>';
+  const inp=wrap.firstChild,clr=wrap.lastChild;inp.id=key;
+  let opts=[],act=-1;
+  const sync=()=>{inp.value=F[key]||F[key+'kw']||'';wrap.classList.toggle('has',!!inp.value)};
+  const pick=v=>{F[key]=v;F[key+'kw']='';sync();cbHide();refreshCascade();state.page=1;render()};
+  const show=()=>{
+    const q=F[key]?'':inp.value;                         // đã chọn sẵn 1 tên -> hiện đủ danh sách
+    cbShown=opts.filter(o=>!q.trim()||kwMatch(o,q));act=-1;
+    cbOwner=inp;cbPick=pick;
+    const r=inp.getBoundingClientRect();
+    cbl.style.left=r.left+'px';cbl.style.top=(r.bottom+2)+'px';cbl.style.minWidth=Math.max(r.width,220)+'px';
+    cbl.innerHTML=cbShown.length
+      ?cbShown.slice(0,300).map((o,i)=>`<div data-i="${i}">${esc(o)}</div>`).join('')+(cbShown.length>300?`<div class="none">… còn ${cbShown.length-300} kết quả, gõ thêm để thu hẹp</div>`:'')
+      :'<div class="none">Không có kết quả</div>';
+    cbl.style.display='block';
+  };
+  const mark=()=>{[...cbl.querySelectorAll('[data-i]')].forEach((d,i)=>d.classList.toggle('act',i===act));const a=cbl.querySelector('.act');if(a)a.scrollIntoView({block:'nearest'})};
+  inp.addEventListener('focus',()=>{show();inp.select()});
+  inp.addEventListener('blur',()=>{if(cbOwner===inp)cbHide()});
+  inp.addEventListener('input',()=>{F[key]='';F[key+'kw']=inp.value.trim();wrap.classList.toggle('has',!!inp.value);show();state.page=1;render()});
+  inp.addEventListener('keydown',e=>{
+    if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+      e.preventDefault();if(cbOwner!==inp)show();
+      const n=Math.min(cbShown.length,300);if(!n)return;
+      act=e.key==='ArrowDown'?(act+1)%n:(act<=0?n-1:act-1);mark();
+    }else if(e.key==='Enter'){
+      e.preventDefault();
+      if(act>=0&&cbShown[act]!=null)pick(cbShown[act]);
+      else if(cbShown.length===1&&cbOwner===inp)pick(cbShown[0]);
+      else cbHide();
+    }else if(e.key==='Escape')cbHide();
+  });
+  clr.addEventListener('mousedown',e=>{e.preventDefault();F[key]='';F[key+'kw']='';sync();cbHide();refreshCascade();state.page=1;render()});
+  inp._refresh=()=>{
+    inp.placeholder=H[col]||('Col '+(col+1));
+    opts=optionsFor(gi,lv);
+    if(F[key]&&!opts.includes(F[key]))F[key]='';
+    sync();
+  };
+  return wrap;
+}
 function buildFilters(){
+  cbHide();
   const box=$('filters');box.innerHTML='';
   GROUPS.forEach((g,gi)=>{
     g.cols.forEach((col,lv)=>{
       if(col>=H.length)return;
+      if(col===CFG.COL.e){box.appendChild(makeCombo(gi,g,lv,col));return}      // WEAPON LIST = ô tìm kiếm
       const sel=document.createElement('select');
       sel.id=g.key+lv;sel.title=H[col]||'';
       sel.onchange=()=>{
         F[g.key+lv]=sel.value;
-        for(let k=lv+1;k<g.cols.length;k++)F[g.key+k]='';   // reset cấp con
+        for(let k=lv+1;k<g.cols.length;k++){F[g.key+k]='';F[g.key+k+'kw']=''}   // reset cấp con
         refreshCascade();state.page=1;render();
       };
       box.appendChild(sel);
@@ -405,6 +571,7 @@ function buildFilters(){
 function refreshCascade(){
   GROUPS.forEach((g,gi)=>g.cols.forEach((col,lv)=>{
     const sel=$(g.key+lv);if(!sel)return;
+    if(sel._refresh){sel._refresh();return}
     fillSelect(sel,H[col]||('Col '+(col+1)),optionsFor(gi,lv),F[g.key+lv]);
   }));
 }
@@ -420,7 +587,7 @@ function filtered(){
   const q=$('q').value.trim().toLowerCase();
   const reg=F.region==null?-1:F.region;
   const pass=r=>{
-    for(const g of GROUPS)for(let l=0;l<g.cols.length;l++){const v=F[g.key+l];if(v&&r.raw[g.cols[l]]!==v)return false}
+    for(const g of GROUPS)for(let l=0;l<g.cols.length;l++){const v=F[g.key+l];if(v&&r.raw[g.cols[l]]!==v)return false;const kw=F[g.key+l+'kw'];if(kw&&!kwMatch(r.raw[g.cols[l]],kw))return false}
     if(F.badge&&!r.badges.includes(F.badge))return false;
     if(reg>=0&&!r.reg[reg])return false;                  // có ở khu vực đang chọn
     if(reg>=0&&F.unique&&r.reg.some((x,i)=>i!==reg&&x))return false; // chỉ có ở khu vực này
@@ -443,7 +610,7 @@ function render(){
       <div class="pic">${imgTag(weaponSrcList(r.img,r),'w',title)||'<div class="noimg">(no image)</div>'}</div>
       ${(vi=>vi?`<div class="tgl" style="display:flex">${vi.labels.map((l,j)=>`<button class="${j?'':'on'}" data-j="${j}">${esc(l)}</button>`).join('')}</div>`:'<div class="tgl"></div>')(en.members?{labels:en.members.map(m=>en.ru.labels[m.j]||en.ru.tokens[m.j]||'#')}:variantInfo(r))}
       <div class="badges">${r.badges.map(b=>imgTag(badgeSrcList(b),'b',b)).join('')}</div>
-      <div class="name">${esc(title)}</div></div>`;
+      <div class="name">${titleHTML(r)}</div></div>`;
   }).join('');
   [...$('grid').children].forEach((el,k)=>{el._g=slice[k].members?slice[k]:null});
   // pager
@@ -467,11 +634,9 @@ $('grid').addEventListener('mousemove',e=>{
   const it=e.target.closest('.item');
   if(!it){tip.style.display='none';return}
   const r=ROWS[+it.dataset.i];
-  const rows=REGIONS.map((g,i)=>r.reg[i]?`<tr${r.rm[i]?' class="rm"':''}><td>${esc(g.name)}</td><td>${esc((r.disp&&r.disp[i])||r.reg[i])}</td></tr>`:'').join('');
+  const rows=REGIONS.map((g,i)=>r.reg[i]?`<tr${r.rm[i]?' class="rm"':''}><td>${esc(g.name)}</td><td>${regHTML(r,i)}</td></tr>`:'').join('');
   if(!rows){tip.style.display='none';return}
-  const ids=[...new Set((r.members?r.members.flatMap(m=>m.row.imgs||[]):(r.imgs||[])).filter(Boolean))];   // nhận diện = cột B
-  const idsHTML=ids.length?`<div class="tip-ids">${ids.map(x=>esc(x.replace(/^.*?BUYWEAPON_INFO_/i,''))).join('<br>')}</div>`:'';
-  tip.innerHTML=idsHTML+`<table>${rows}</table>`;
+  tip.innerHTML=`<table>${rows}</table>`;
   tip.style.display='block';
   let x=e.clientX+16,y=e.clientY+16;
   const w=tip.offsetWidth,h=tip.offsetHeight;
@@ -506,13 +671,19 @@ function dataJsFallback(){
     }
     if(!refs.length)refs=(CFG.SHEETS&&CFG.SHEETS.length?CFG.SHEETS:[CFG.GID]).map(String);
     const res=await Promise.allSettled(refs.map(r=>loadSheet(r)));
-    const ok=res.filter(x=>x.status==='fulfilled').map(x=>parseTable(x.value));
+    const okIdx=res.map((x,i)=>x.status==='fulfilled'?i:-1).filter(i=>i>=0);
+    const ok=okIdx.map(i=>parseTable(res[i].value));
     if(!ok.length)throw res[0].reason;
+    let stNote='';
+    if(CFG.API_KEY){                                    // đọc định dạng gạch ngang thật từ Sheets API
+      try{const st=await loadStrikes(okIdx.map(i=>refs[i]));ok.forEach((t,k)=>{const h=applyStrikes(t.rows,st[k]);if(k===0&&h)HDR_STRIKE=h})}
+      catch(e){stNote=' · Không đọc được định dạng gạch ngang ('+e.message+')'}
+    }
     const bad=refs.filter((_,i)=>res[i].status==='rejected');
     const seen=new Set();                               // bỏ dòng trùng hệt nhau (phòng khi 1 tab bị đọc 2 lần)
     const allRows=ok.flatMap(x=>x.rows).filter(r=>{const k=r.join('\u0001');if(seen.has(k))return false;seen.add(k);return true});
     build(ok[0].headers,allRows);                       // gộp mọi tab, tiêu đề lấy từ tab đầu tiên
-    $('ver').textContent='Dữ liệu trực tiếp từ Google Sheets · '+ok.length+' tab · '+ROWS.length+' vũ khí · F5 để cập nhật'+(bad.length?' · KHÔNG đọc được tab: '+bad.join(', '):'');
+    $('ver').textContent='Dữ liệu trực tiếp từ Google Sheets · '+ok.length+' tab · '+ROWS.length+' vũ khí · F5 để cập nhật'+(bad.length?' · KHÔNG đọc được tab: '+bad.join(', '):'')+stNote;
   }catch(err){
     const fb=dataJsFallback();
     if(fb){build(fb.headers,fb.rows);$('ver').textContent='Đang dùng dữ liệu dự phòng từ data.js ('+err.message+')'}
