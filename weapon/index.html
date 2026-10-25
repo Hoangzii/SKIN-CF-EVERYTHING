@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Weapon Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f5f5f5;--card:#fff;--tx:#111;--sub:#555;--line:#d9d9d9;--accent:#1677ff;--label:#99ccff;--label-tx:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#141414;--card:#1f1f1f;--tx:#eee;--sub:#aaa;--line:#3a3a3a;--label:#2b4a73;--label-tx:#fff}}
+*{box-sizing:border-box}
+body{margin:0;font-family:'Lexend',system-ui,sans-serif;background:var(--bg);color:var(--tx);padding:20px 16px 40px}
+h1{text-align:center;margin:6px 0 2px;font-size:26px;font-weight:700}
+.ver{text-align:center;color:var(--sub);font-size:13px;margin-bottom:14px}
+.bar{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:10px auto;max-width:1300px}
+.bar input[type=text]{width:min(420px,100%);padding:8px 12px}
+input,select,button{font-family:inherit;font-size:13px;padding:7px 10px;border:1px solid var(--line);border-radius:4px;background:var(--card);color:var(--tx)}
+select{min-width:140px;max-width:220px}
+button{cursor:pointer}
+button.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+label.chk{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
+#filters{flex-wrap:nowrap;overflow-x:auto;max-width:1600px;justify-content:stretch;align-items:center}
+#filters select{flex:1 1 0;min-width:0;max-width:none}
+#filters label.chk{flex:none;white-space:nowrap}
+.grid{--gap:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(max(120px,calc((100% - 5*var(--gap))/6)),1fr));gap:var(--gap);max-width:1600px;margin:18px auto}
+.item{background:var(--card);border-top:3px solid var(--label);border-radius:2px;padding:10px 8px 0;display:flex;flex-direction:column;align-items:center;min-height:124px;position:relative;box-shadow:0 1px 3px rgba(0,0,0,.08);transition:transform .12s,box-shadow .12s}
+.item:hover{transform:translateY(-2px);box-shadow:0 4px 10px rgba(0,0,0,.18);border-top-color:var(--accent)}
+.item .pic{height:100px;width:100%;display:flex;align-items:center;justify-content:center}
+.item img.w{max-width:100%;max-height:100px;object-fit:contain}
+.item .noimg{font-size:11px;color:var(--sub)}
+.tgl{display:none;gap:6px;justify-content:center;margin:2px 0 4px}
+.tgl button{font-size:9px;line-height:1;padding:4px 10px;border:1px solid var(--accent);border-radius:4px;background:var(--card);color:var(--accent);cursor:pointer}
+.tgl button.on{background:var(--accent);color:#fff}
+.badges{position:absolute;left:8px;top:88px;display:flex;gap:4px;margin:0;min-height:0;z-index:1}   /* cố định góc dưới-trái vùng hình (top = 10px padding + 100px hình - 22px) */
+.badges img{width:20px;height:20px;object-fit:contain}
+.name{margin-top:auto;width:calc(100% + 16px);background:var(--label);color:var(--label-tx);text-align:center;font-size:9px;font-weight:600;padding:5px 4px;line-height:1.25}
+.pager{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;font-size:13px;margin-top:10px}
+.pager input{width:64px}
+.pager .on{background:var(--accent);color:#fff;border-color:var(--accent)}
+#tip{position:fixed;z-index:50;pointer-events:none;background:rgba(40,40,40,.94);color:#fff;border-radius:6px;padding:10px 14px;font-size:12.5px;line-height:1.7;display:none;max-width:420px}
+#tip table{border-collapse:collapse}
+#tip tr.rm td{color:#9a9a9a;text-decoration:line-through}
+#tip .tip-ids{color:#fbdf89;font-weight:700;margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid rgba(251,223,137,.35);word-break:break-all}
+#tip td{vertical-align:top;padding:0 0 0 0}
+#tip td:first-child{text-align:right;font-weight:700;padding-right:14px;white-space:nowrap}
+#msg{text-align:center;color:var(--sub);padding:30px;font-size:14px}
+#msg.err{color:#d4380d}
+</style>
+</head>
+<body>
+<h1>Weapon Guide</h1>
+<div class="ver" id="ver">Đang tải dữ liệu…</div>
+
+<div class="bar">
+  <input type="text" id="q" placeholder="Tìm tên vũ khí (mọi khu vực)…">
+  <button class="pri" id="btnSearch">Search</button>
+  <button id="btnReset">Reset</button>
+</div>
+<div class="bar" id="filters"></div>
+
+<div id="msg"></div>
+<div class="grid" id="grid"></div>
+<div class="pager" id="pager"></div>
+<div id="tip"></div>
+
+<!-- data.js: giữ nguyên, không chỉnh sửa. Nếu file có khai báo SHEET_ID / SHEET_GID thì sẽ được dùng; nếu có mảng dữ liệu thì dùng làm dự phòng khi không tải được Sheet. -->
+<script src="data.js" onerror="void 0"></script>
+<script>
+/* ================= CẤU HÌNH ================= */
+const CFG = {
+  SHEET_ID : (typeof SHEET_ID  !== 'undefined' && SHEET_ID)  || '1GVgZrCybnuEdGPtVE33NMCmwRWSqfgLHIuz2XAXxhoc',
+  GID      : (typeof SHEET_GID !== 'undefined' && SHEET_GID) || '2098056846',
+  // Danh sách các tab (sheet) trong file Google Sheets sẽ được đọc và GỘP lại thành một. Mỗi tab phải có dòng 1 là tiêu đề, cột A–V giống nhau.
+  // Mỗi phần tử là gid (dãy số trên URL sau #gid=) hoặc tên tab (ví dụ 'SNIPER'). Thêm tab mới chỉ cần thêm một dòng vào đây.
+  // Cách 1 (khuyên dùng): tạo 1 tab tên "TABS" trong Sheet, cột A liệt kê tên các tab (mỗi tab 1 dòng, bắt đầu từ dòng 1, không có tiêu đề;
+  // đặt dấu # đầu dòng để tạm tắt). Thêm tab mới chỉ cần thêm 1 dòng ở tab TABS, KHÔNG phải sửa file này.
+  TAB_LIST: 'TABS',
+  // Cách 2 (dự phòng nếu chưa có tab TABS): liệt kê tên tab hoặc gid ở đây.
+  SHEETS: ['2098056846' , '953162863' /* RIFLE */ /*, 'SNIPER', 'SMG', 'SHOTGUN', 'MG' */],
+  IMG_DIR  : 'Img/',
+  // Hình có thể nằm trong thư mục con của Img/ (vd Img/RIFLE/, Img/SNIPER/). Trang tự thử: thư mục trùng với cột TYPE (C) / CATEGORIZED (D)
+  // của dòng đó trước, rồi thư mục gốc Img/, rồi các thư mục trong danh sách dưới đây. Thêm tên thư mục mới vào đây nếu cần.
+  IMG_SUBDIRS: ['RIFLE','SNIPER','SMG','SHOTGUN','MG','PISTOL','MELEE','GRENADE','FLASHBANG','SMOKE'],
+  BADGE_DIR: 'Img/badges/',
+  IMG_PREFIX: 'BUYWEAPON_INFO',
+  // Chỉ số cột (A=0). Đổi tại đây nếu sheet đổi cấu trúc.
+  COL: { name:0, image:1, c:2, d:3, e:4, f:5, g:6, h:7, badges:8, regionFrom:9, regionTo:21 },
+  // Nút đổi hình: lấy từ chính ô cột B. Ô có 1 tên => không có nút. Ô có 2+ tên (cách nhau bằng dấu , ; hoặc xuống dòng) => mỗi tên là 1 nút,
+  // tất cả nằm chung thư mục Img/. Chữ trên nút: tìm luật trong VARIANT_RULES có đoạn tên (tokens) nằm trong tên file, nếu không thì dùng DEFAULT_LABELS theo thứ tự.
+  // Gộp các dòng riêng thành 1 thẻ: tokens là đoạn tên file khác nhau giữa các biến thể ('' = bản gốc, không có đoạn đó).
+  // Dòng nào có tên file chỉ khác nhau đúng đoạn này (cùng thư mục Img/) sẽ được gộp, thứ tự nút theo thứ tự tokens.
+  GROUP_RULES: [],   // (không dùng nữa - gộp khung do VARIANT_RULES có merge:true đảm nhiệm)
+  DEFAULT_LABELS: ['Normal','Change'],
+  // Luật có merge:true sẽ GỘP nhiều dòng của Sheet thành 1 khung: các file chỉ khác nhau ở token (hoặc không có token = nút đầu/mặc định).
+  VARIANT_RULES: [
+    { tokens:['RifleBeast','KnifeBeast'], labels:['Default','Change Mode'] },
+    { tokens:['BaiHu_VN26_NM','BaiHu_VN26'], labels:['Original','Virtus.Pro'] },
+    { tokens:['Dominator_VN26_nm','Dominator_VN26'], labels:['Original','Twisted Minds'] },
+    { tokens:['AWM-GOLD','AWM_GOLD'], labels:['World','JP/KR'] },
+    { tokens:['BurningShot','BurningShot_Charge'], labels:['Normal','Charged'] },
+    { tokens:['','_DrumMag'], labels:['Normal','Drum Magazine'], merge:true },
+    { tokens:['','_Dmag'], labels:['Normal','Drum Magazine'], merge:true },
+    { tokens:['','_Drum'], labels:['Normal','Drum Magazine'], merge:true },
+    { tokens:['_Rifle','_Knife'], labels:['Gun','Knife'] },
+    { tokens:['','_Carbine'], labels:['Default','Carbine'] },
+    { tokens:['_GSpirit', '_GSpirit_Changemode'],         labels:['Normal','Change Mode'] },
+    { tokens:['','_Changemode'], labels:['Normal','Dual'] },
+    { tokens:['_Protocol','_Protocol_Chg'], labels:['Normal','Change Mode'] },
+    { tokens:['_UnderTech','_UnderTech_Chg'], labels:['Normal','Change Mode'] },
+    { tokens:['_UT','_UT_Chg'], labels:['Normal','Change Mode'] },
+    { tokens:['M200_DemonicBeast','M200_DemonicBeast_Chg','M200_DemonicBeast_PVE'], labels:['PVP','PVE','PVE Charged'] },
+    { tokens:['','_Chg'], labels:['Normal','Dual'] },
+    { tokens:['','_DMR'], labels:['Normal','DMR'] },
+    { tokens:['','_Change'], labels:['Default','Change'] },
+    { tokens:['','_spear','_wheel'], labels:['PVP','Spear','Wheel'] },
+    { tokens:['','_Silencer','_Scope','_ExtendMag'], labels:['Default','Silencer','Scope','Ext. Mag'], merge:true },
+    { tokens:['_XS_1','_XS_2'], labels:['Grip','No Grip'] },
+    // { tokens:['','_NT'],               labels:['regular','De-sign'] },   // hậu tố: ví dụ _NT thêm cuối tên file
+    // { tokens:['_A','_B','_C'],         labels:['Một','Hai','Ba'] },     // 3 nút
+  ],
+  CLOSED_REGIONS: ['Russia','Indonesia','Korea','Español','Europe','SEA','Japan','Taiwan'],   // khu vực đã ngừng hoạt động: mọi dữ liệu của cột này bị gạch ngang + xám. Hoặc ghi "Russia (Removed)" ngay tiêu đề cột trong Sheet.
+  REMOVED_WORDS: ['Removed'],   // từ đánh dấu ngừng hoạt động trong ô khu vực (thêm từ khác nếu cần, vd 'Đã gỡ')
+  PER_PAGE: 24
+};
+
+/* ================= TẢI SHEET (JSONP, chạy được cả file:// ) ================= */
+let __gsN=0;
+function loadSheet(ref,headers){
+  return new Promise((resolve,reject)=>{
+    const cb='__gs'+(++__gsN)+'_'+Date.now();
+    const s=document.createElement('script');
+    const timer=setTimeout(()=>{cleanup();reject(new Error('Hết thời gian chờ. Kiểm tra Sheet đã chia sẻ "Anyone with the link – Viewer" chưa.'))},12000);
+    function cleanup(){clearTimeout(timer);delete window[cb];s.remove()}
+    window[cb]=r=>{cleanup();r&&r.status==='ok'?resolve(r.table):reject(new Error('Tab '+ref+' lỗi: '+JSON.stringify(r&&r.errors||r)))};
+    s.onerror=()=>{cleanup();reject(new Error('Tab '+ref+': không tải được (chưa public, sai tên/gid hoặc mất mạng).'))};
+    s.src=`https://docs.google.com/spreadsheets/d/${CFG.SHEET_ID}/gviz/tq?${/^\d+$/.test(String(ref).trim())?'gid='+String(ref).trim():'sheet='+encodeURIComponent(ref)}&headers=${headers===0?0:1}&tqx=out:json;responseHandler:${cb}&_=${Date.now()}`;
+    document.head.appendChild(s);
+  });
+}
+const cellStr=c=>c==null||c.v==null?'':String(c.f!=null&&typeof c.v==='number'?c.f:c.v).trim();
+
+function parseTable(t){
+  let headers=t.cols.map(c=>(c.label||'').trim());
+  let rows=t.rows.map(r=>{const a=[];for(let i=0;i<t.cols.length;i++)a.push(cellStr(r.c&&r.c[i]));return a});
+  if(headers.every(h=>!h)&&rows.length){headers=rows.shift()}
+  return {headers,rows};
+}
+
+/* ================= DỮ LIỆU ================= */
+let H=[],ROWS=[],ALLROWS=[],REGIONS=[],state={page:1,per:CFG.PER_PAGE};
+const F={}; // giá trị bộ lọc
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+
+/* Ô khu vực: ghi "Removed" (một mình, hoặc kèm tên: "Юбилей Removed", "Tên (Removed)", "Tên | Removed").
+   - chỉ ghi Removed  => dùng tên ở cột A, gạch ngang + xám
+   - kèm tên          => hiện tên đó, gạch ngang + xám */
+const RM_RE=new RegExp('(^|[^\\p{L}\\p{N}])(?:'+CFG.REMOVED_WORDS.map(w=>w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|')+')(?![\\p{L}\\p{N}])','giu');
+function parseReg(v,name){
+  v=String(v||'').trim();
+  if(!v)return {text:'',removed:false};
+  let removed=false;
+  let t=v.replace(RM_RE,(m,pre)=>{removed=true;return pre});
+  if(removed){
+    t=t.replace(/\(\s*\)|\[\s*\]/g,'').replace(/^[\s|;,:\-–—]+|[\s|;,:\-–—]+$/g,'').trim();
+    if(!t){ return {text:name||'',disp:v,removed:true}; }
+  }
+  return {text:t,removed};
+}
+function build(headers,rows){
+  H=headers;
+  const C=CFG.COL;
+  REGIONS=[];
+  for(let i=C.regionFrom;i<=C.regionTo&&i<headers.length;i++) {
+    const raw=headers[i]||('Region '+(i-C.regionFrom+1)),ph=parseReg(raw,'');
+    const name=ph.removed?(ph.text||raw):raw;
+    REGIONS.push({idx:i,name,closed:ph.removed||CFG.CLOSED_REGIONS.some(w=>w.toLowerCase()===name.trim().toLowerCase())});
+  }
+  ROWS=rows.filter(r=>r[C.name]||r[C.image]).map(r=>({
+    raw:r,
+    name:r[C.name],
+    ...(x=>({imgs:x,img:x[0]||''}))((r[C.image]||'').split(/[,;\n|]+/).map(t=>t.trim()).filter(Boolean)),
+    badges:(r[C.badges]||'').split(/[,;\n|]+/).map(x=>x.trim()).filter(Boolean),
+    ...(p=>({reg:p.map(x=>x.text),disp:p.map(x=>x.disp),rm:p.map((x,k)=>x.removed||(REGIONS[k].closed&&!!x.text))}))(REGIONS.map(g=>parseReg(r[g.idx],r[C.name])))
+  }));
+  ALLROWS=ROWS;
+  ROWS=mergeGroups(ROWS);
+}
+
+/* Gộp nhiều dòng (Default / Silencer / Scope ...) thành 1 thẻ có nút bấm, theo GROUP_RULES */
+function mergeGroups(rows){
+  const rules=CFG.GROUP_RULES||[];
+  if(!rules.length)return rows;
+  const buckets=new Map(),info=new Map();
+  rows.forEach(r=>{
+    if(!r.img)return;
+    const base=normBase(r.img);
+    for(let ri=0;ri<rules.length;ri++){
+      const T=rules[ri].tokens;
+      let bi=-1,len=-1;
+      T.forEach((t,j)=>{if(t&&base.includes(t)&&t.length>len){bi=j;len=t.length}});
+      if(bi<0){bi=T.indexOf('');if(bi<0)continue}
+      const stem=T[bi]?base.replace(T[bi],''):base;
+      const key=ri+'|'+stem.toLowerCase();
+      if(!buckets.has(key))buckets.set(key,new Map());
+      const bk=buckets.get(key);
+      if(!bk.has(bi)){bk.set(bi,{row:r,bi,base,ri});info.set(r,key)}
+      return;
+    }
+  });
+  const out=[],done=new Set();
+  rows.forEach(r=>{
+    const key=info.get(r);
+    if(!key){out.push(r);return}
+    const bk=buckets.get(key);
+    if(bk.size<2){out.push(r);return}
+    if(done.has(key))return;
+    done.add(key);
+    const ms=[...bk.values()].sort((a,b)=>a.bi-b.bi).map(m=>({row:m.row,base:m.base,label:rules[m.ri].labels[m.bi]||('#'+(m.bi+1))}));
+    out.push({...ms[0].row,members:ms});
+  });
+  return out;
+}
+
+/* ================= HÌNH ẢNH ================= */
+function imgDirs(row){
+  const hint=row&&row.raw?[row.raw[CFG.COL.c],row.raw[CFG.COL.d]].map(x=>(x||'').trim()).filter(Boolean):[];
+  const clean=x=>x.replace(/[\/]+$/,'');
+  const sub=[...hint,...CFG.IMG_SUBDIRS].map(clean).filter(Boolean).map(d=>CFG.IMG_DIR+d+'/');
+  const first=hint.length?sub.slice(0,hint.length):[];
+  return [...new Set([...first,CFG.IMG_DIR,...sub])];
+}
+function weaponSrcList(v,row){
+  if(!v) return [];
+  let n=v.split(/[\/]/).pop().trim();
+  const m=n.match(/\.(png|jpg|jpeg|webp)$/i);
+  const ext=m?m[0]:'';
+  let base=ext?n.slice(0,-ext.length):n;
+  if(!base.toUpperCase().startsWith(CFG.IMG_PREFIX)) base=CFG.IMG_PREFIX+'_'+base;
+  const exts=[...new Set(ext?[ext,'.PNG','.png']:['.PNG','.png','.jpg'])];
+  return imgDirs(row).flatMap(d=>exts.map(e=>d+base+e));
+}
+function badgeSrcList(v){
+  let n=v.split(/[\\/]/).pop().replace(/\.(png|jpg|jpeg|webp)$/i,'').trim();
+  n=n.replace(/^tag_/i,'');
+  return ['.PNG','.png'].flatMap(e=>[CFG.BADGE_DIR+'tag_'+n+e,CFG.BADGE_DIR+'tag_'+n.toLowerCase()+e]);
+}
+function fallbackImg(img){
+  const list=JSON.parse(img.dataset.alts||'[]');
+  const next=list.shift();
+  if(next){img.dataset.alts=JSON.stringify(list);img.src=next}
+  else{
+    if(img.classList.contains('w')){const d=document.createElement('div');d.className='noimg';d.textContent='(no image)';img.replaceWith(d)}
+    else img.remove();
+  }
+}
+window.__fb=fallbackImg;
+function imgTag(list,cls,alt){
+  if(!list.length) return '';
+  const [first,...rest]=list;
+  return `<img class="${cls}" src="${esc(first)}" alt="${esc(alt)}" loading="lazy" data-alts='${esc(JSON.stringify(rest))}' onerror="__fb(this)">`;
+}
+
+/* ================= NÚT ĐỔI HÌNH (theo ô cột B) ================= */
+function normBase(v){
+  let n=v.split(/[\\/]/).pop().trim().replace(/\.(png|jpg|jpeg|webp)$/i,'');
+  if(!n.toUpperCase().startsWith(CFG.IMG_PREFIX)) n=CFG.IMG_PREFIX+'_'+n;
+  return n;
+}
+function variantInfo(r){
+  if(r.members) return {bases:r.members.map(m=>m.base),labels:r.members.map(m=>m.label),rows:r.members.map(m=>m.row)};
+  if(!r.imgs||r.imgs.length<2) return null;
+  const bases=r.imgs.map(normBase);
+  const has=(ru,b)=>ru.tokens.some(t=>t&&b.includes(t));
+  const rule=CFG.VARIANT_RULES.find(ru=>bases.some(b=>has(ru,b)));   // luật đứng trước được ưu tiên
+  const labels=bases.map((b,k)=>{
+    if(rule){
+      let bi=-1,len=-1;
+      rule.tokens.forEach((t,j)=>{if(t&&b.includes(t)&&t.length>len){bi=j;len=t.length}});
+      if(bi<0)bi=rule.tokens.indexOf('');
+      if(bi>=0&&rule.labels[bi])return rule.labels[bi];
+    }
+    return CFG.DEFAULT_LABELS[k]||('#'+(k+1));
+  });
+  return {bases,labels};
+}
+const allRemoved=row=>{const a=row.reg.map((v,i)=>v?row.rm[i]:null).filter(x=>x!==null);return a.length>0&&a.every(Boolean)};   // mọi khu vực có dữ liệu đều Removed
+const removedIn=row=>{const g=F.region==null?-1:F.region;return g>=0?!!row.rm[g]:allRemoved(row)};
+function titleOf(row){
+  const reg=F.region==null?-1:F.region;
+  return (reg>=0&&row.reg[reg])||row.name;
+}
+function buildEntries(list){
+  const mrules=CFG.VARIANT_RULES.map((ru,ri)=>({ru,ri})).filter(x=>x.ru.merge);
+  if(!mrules.length)return list.map(row=>({row}));
+  const byKey=new Map(),of=new Map();
+  list.forEach(row=>{
+    if(!row.img)return;
+    const base=normBase(row.img);
+    for(const {ru,ri} of mrules){
+      let j=-1,len=-1;
+      ru.tokens.forEach((t,k)=>{if(t&&base.includes(t)&&t.length>len){j=k;len=t.length}});
+      if(j<0)continue;
+      const stem=base.replace(ru.tokens[j],'').toLowerCase(),key=ri+'|'+stem;
+      let g=byKey.get(key);
+      if(!g){g={ru,stem,members:[]};byKey.set(key,g)}
+      if(g.members.some(m=>m.j===j))return;          // dòng trùng: để riêng
+      g.members.push({row,j});of.set(row,g);
+      return;
+    }
+  });
+  // dòng mặc định (không chứa token) ghép vào nhóm cùng "stem"
+  const defs=new Map();
+  byKey.forEach(g=>{const e=g.ru.tokens.indexOf('');if(e>=0){if(!defs.has(g.stem))defs.set(g.stem,[]);defs.get(g.stem).push(g)}});
+  list.forEach(row=>{
+    if(of.has(row)||!row.img)return;
+    const gs=defs.get(normBase(row.img).toLowerCase());if(!gs)return;
+    const g=gs.find(x=>{const e=x.ru.tokens.indexOf('');return !x.members.some(m=>m.j===e)});
+    if(!g)return;
+    g.members.push({row,j:g.ru.tokens.indexOf('')});of.set(row,g);
+  });
+  const out=[],done=new Set();
+  list.forEach(row=>{
+    const g=of.get(row);
+    if(!g||g.members.length<2){out.push({row});return}
+    if(done.has(g))return;done.add(g);
+    const m=g.members.slice().sort((a,b)=>a.j-b.j);
+    out.push({row:m[0].row,members:m,ru:g.ru});
+  });
+  return out;
+}
+$('grid').addEventListener('click',e=>{
+  const b=e.target.closest('.tgl button');if(!b)return;
+  const it=b.closest('.item');
+  if(it._g){                                           // khung gộp nhiều dòng
+    const m=it._g.members[+b.dataset.j];if(!m)return;
+    const row=m.row,title=titleOf(row);
+    it.dataset.i=ROWS.indexOf(row);it.classList.toggle('rm',removedIn(row));
+    it.querySelector('.pic').innerHTML=imgTag(weaponSrcList(row.img,row),'w',title)||'<div class="noimg">(no image)</div>';
+    it.querySelector('.name').textContent=title;
+    it.querySelector('.badges').innerHTML=row.badges.map(x=>imgTag(badgeSrcList(x),'b',x)).join('');
+    it.querySelectorAll('.tgl button').forEach(x=>x.classList.toggle('on',x===b));
+    return;
+  }
+  const img=it.querySelector('img.w');
+  const vi=variantInfo(ROWS[+it.dataset.i]);
+  if(!vi||!img)return;
+  const list=weaponSrcList(vi.bases[+b.dataset.j],ROWS[+it.dataset.i]);
+  img.dataset.alts=JSON.stringify(list.slice(1));
+  img.src=list[0];
+  it.querySelectorAll('.tgl button').forEach(x=>x.classList.toggle('on',x===b));
+});
+
+/* ================= BỘ LỌC ================= */
+// Nhóm 1: C → D → E (TYPE/CATEGORIZED/WEAPON LIST) ; Nhóm 2: F → G → H (CLASS/PVE/NANO) ; Badges (I) ; Khu vực (J–V)
+const GROUPS=[
+  {key:'g1',cols:[CFG.COL.c,CFG.COL.d,CFG.COL.e]},
+  {key:'g2',cols:[CFG.COL.f,CFG.COL.g,CFG.COL.h]}
+];
+function uniq(arr){return [...new Set(arr.filter(Boolean))]}
+
+function optionsFor(gi,level){
+  const g=GROUPS[gi];
+  let rows=ALLROWS;
+  for(let l=0;l<level;l++){const v=F[g.key+l];if(v)rows=rows.filter(r=>r.raw[g.cols[l]]===v)}
+  return uniq(rows.map(r=>r.raw[g.cols[level]]));
+}
+function fillSelect(sel,label,opts,cur){
+  sel.innerHTML=`<option value="">${esc(label)} </option>`+opts.map(o=>`<option value="${esc(o)}"${o===cur?' selected':''}>${esc(o)}</option>`).join('');
+}
+function buildFilters(){
+  const box=$('filters');box.innerHTML='';
+  GROUPS.forEach((g,gi)=>{
+    g.cols.forEach((col,lv)=>{
+      if(col>=H.length)return;
+      const sel=document.createElement('select');
+      sel.id=g.key+lv;sel.title=H[col]||'';
+      sel.onchange=()=>{
+        F[g.key+lv]=sel.value;
+        for(let k=lv+1;k<g.cols.length;k++)F[g.key+k]='';   // reset cấp con
+        refreshCascade();state.page=1;render();
+      };
+      box.appendChild(sel);
+    });
+  });
+  // Khu vực
+  const sr=document.createElement('select');sr.id='fRegion';
+  sr.innerHTML='<option value="-1">All regions</option>'+REGIONS.map((r,i)=>`<option value="${i}"${r.closed?' style="color:#999"':''}>${esc(r.name)}${r.closed?' (Removed)':''}</option>`).join('');
+  sr.onchange=()=>{F.region=+sr.value;state.page=1;render()};box.appendChild(sr);
+  const lb=document.createElement('label');lb.className='chk';
+  lb.innerHTML='<input type="checkbox" id="fUnique"> Unique to the region';
+  lb.querySelector('input').onchange=e=>{F.unique=e.target.checked;state.page=1;render()};
+  box.appendChild(lb);
+  refreshCascade();
+}
+function refreshCascade(){
+  GROUPS.forEach((g,gi)=>g.cols.forEach((col,lv)=>{
+    const sel=$(g.key+lv);if(!sel)return;
+    fillSelect(sel,H[col]||('Col '+(col+1)),optionsFor(gi,lv),F[g.key+lv]);
+  }));
+}
+function resetAll(){
+  Object.keys(F).forEach(k=>delete F[k]);
+  F.region=-1;$('q').value='';
+  buildFilters();$('fRegion').value='-1';$('fUnique').checked=false;
+  state.page=1;render();
+}
+
+/* ================= LỌC & HIỂN THỊ ================= */
+function filtered(){
+  const q=$('q').value.trim().toLowerCase();
+  const reg=F.region==null?-1:F.region;
+  const pass=r=>{
+    for(const g of GROUPS)for(let l=0;l<g.cols.length;l++){const v=F[g.key+l];if(v&&r.raw[g.cols[l]]!==v)return false}
+    if(F.badge&&!r.badges.includes(F.badge))return false;
+    if(reg>=0&&!r.reg[reg])return false;                  // có ở khu vực đang chọn
+    if(reg>=0&&F.unique&&r.reg.some((x,i)=>i!==reg&&x))return false; // chỉ có ở khu vực này
+    if(q&&![r.name,...r.reg].some(x=>x.toLowerCase().includes(q)))return false;
+    return true;
+  };
+  return ROWS.filter(r=>r.members?r.members.some(m=>pass(m.row)):pass(r));
+}
+function render(){
+  const list=buildEntries(filtered()),reg=F.region==null?-1:F.region;
+  const per=state.per,pages=Math.max(1,Math.ceil(list.length/per));
+  if(state.page>pages)state.page=pages;
+  const slice=list.slice((state.page-1)*per,state.page*per);
+  $('msg').textContent=list.length?'':'Không có vũ khí nào khớp bộ lọc.';
+  $('msg').className='';
+  $('grid').innerHTML=slice.map(en=>{
+    const r=en.row;
+    const title=titleOf(r);
+    return `<div class="item${removedIn(r)?' rm':''}" data-i="${ROWS.indexOf(r)}">
+      <div class="pic">${imgTag(weaponSrcList(r.img,r),'w',title)||'<div class="noimg">(no image)</div>'}</div>
+      ${(vi=>vi?`<div class="tgl" style="display:flex">${vi.labels.map((l,j)=>`<button class="${j?'':'on'}" data-j="${j}">${esc(l)}</button>`).join('')}</div>`:'<div class="tgl"></div>')(en.members?{labels:en.members.map(m=>en.ru.labels[m.j]||en.ru.tokens[m.j]||'#')}:variantInfo(r))}
+      <div class="badges">${r.badges.map(b=>imgTag(badgeSrcList(b),'b',b)).join('')}</div>
+      <div class="name">${esc(title)}</div></div>`;
+  }).join('');
+  [...$('grid').children].forEach((el,k)=>{el._g=slice[k].members?slice[k]:null});
+  // pager
+  let p=`<span>per page</span><input type="number" min="1" id="pp" value="${per}"><span>items</span>
+    <button id="pPrev" ${state.page<=1?'disabled':''}>‹</button>`;
+  const show=new Set([1,pages,state.page-1,state.page,state.page+1].filter(x=>x>=1&&x<=pages));
+  let last=0;[...show].sort((a,b)=>a-b).forEach(x=>{if(x-last>1)p+='<span>…</span>';p+=`<button class="pg ${x===state.page?'on':''}" data-p="${x}">${x}</button>`;last=x});
+  p+=`<button id="pNext" ${state.page>=pages?'disabled':''}>›</button>
+    <span>Jump to</span><input type="number" min="1" max="${pages}" id="pj" value="${state.page}"><button id="pGo">Go</button>
+    <span style="color:var(--sub)">A total of ${list.length} items</span>`;
+  $('pager').innerHTML=p;
+  $('pPrev').onclick=()=>{state.page--;render()};$('pNext').onclick=()=>{state.page++;render()};
+  document.querySelectorAll('.pg').forEach(b=>b.onclick=()=>{state.page=+b.dataset.p;render()});
+  $('pGo').onclick=()=>{state.page=Math.min(pages,Math.max(1,+$('pj').value||1));render()};
+  $('pp').onchange=e=>{state.per=Math.max(1,+e.target.value||CFG.PER_PAGE);state.page=1;render()};
+}
+
+/* ================= TOOLTIP THEO KHU VỰC ================= */
+const tip=$('tip');
+$('grid').addEventListener('mousemove',e=>{
+  const it=e.target.closest('.item');
+  if(!it){tip.style.display='none';return}
+  const r=ROWS[+it.dataset.i];
+  const rows=REGIONS.map((g,i)=>r.reg[i]?`<tr${r.rm[i]?' class="rm"':''}><td>${esc(g.name)}</td><td>${esc((r.disp&&r.disp[i])||r.reg[i])}</td></tr>`:'').join('');
+  if(!rows){tip.style.display='none';return}
+  const ids=[...new Set((r.members?r.members.flatMap(m=>m.row.imgs||[]):(r.imgs||[])).filter(Boolean))];   // nhận diện = cột B
+  const idsHTML=ids.length?`<div class="tip-ids">${ids.map(x=>esc(x.replace(/^.*?BUYWEAPON_INFO_/i,''))).join('<br>')}</div>`:'';
+  tip.innerHTML=idsHTML+`<table>${rows}</table>`;
+  tip.style.display='block';
+  let x=e.clientX+16,y=e.clientY+16;
+  const w=tip.offsetWidth,h=tip.offsetHeight;
+  if(x+w>innerWidth-8)x=e.clientX-w-16;
+  if(y+h>innerHeight-8)y=e.clientY-h-16;
+  tip.style.left=Math.max(4,x)+'px';tip.style.top=Math.max(4,y)+'px';
+});
+$('grid').addEventListener('mouseleave',()=>tip.style.display='none');
+
+/* ================= KHỞI CHẠY (mỗi lần F5 tải lại Sheet) ================= */
+$('btnSearch').onclick=()=>{state.page=1;render()};
+$('q').addEventListener('keydown',e=>{if(e.key==='Enter'){state.page=1;render()}});
+$('btnReset').onclick=resetAll;
+
+function dataJsFallback(){
+  for(const k of ['DATA','data','WEAPONS','weapons','weaponData']){
+    const v=window[k];
+    if(Array.isArray(v)&&v.length&&Array.isArray(v[0]))return {headers:v[0].map(String),rows:v.slice(1).map(r=>r.map(x=>x==null?'':String(x)))};
+  }
+  return null;
+}
+(async function init(){
+  try{
+    let refs=[];
+    if(CFG.TAB_LIST){                                   // đọc danh sách tab từ tab "TABS" (nếu có)
+      try{
+        const t=await loadSheet(CFG.TAB_LIST,0);
+        const names=t.rows.map(r=>cellStr(r.c&&r.c[0])).filter(x=>x&&!x.startsWith('#')&&x.toLowerCase()!==CFG.TAB_LIST.toLowerCase());
+        if(names.length&&names.length<=40)refs=[...new Set(names)];
+      }catch(e){}
+    }
+    if(!refs.length)refs=(CFG.SHEETS&&CFG.SHEETS.length?CFG.SHEETS:[CFG.GID]).map(String);
+    const res=await Promise.allSettled(refs.map(r=>loadSheet(r)));
+    const ok=res.filter(x=>x.status==='fulfilled').map(x=>parseTable(x.value));
+    if(!ok.length)throw res[0].reason;
+    const bad=refs.filter((_,i)=>res[i].status==='rejected');
+    const seen=new Set();                               // bỏ dòng trùng hệt nhau (phòng khi 1 tab bị đọc 2 lần)
+    const allRows=ok.flatMap(x=>x.rows).filter(r=>{const k=r.join('\u0001');if(seen.has(k))return false;seen.add(k);return true});
+    build(ok[0].headers,allRows);                       // gộp mọi tab, tiêu đề lấy từ tab đầu tiên
+    $('ver').textContent='Dữ liệu trực tiếp từ Google Sheets · '+ok.length+' tab · '+ROWS.length+' vũ khí · F5 để cập nhật'+(bad.length?' · KHÔNG đọc được tab: '+bad.join(', '):'');
+  }catch(err){
+    const fb=dataJsFallback();
+    if(fb){build(fb.headers,fb.rows);$('ver').textContent='Đang dùng dữ liệu dự phòng từ data.js ('+err.message+')'}
+    else{$('ver').textContent='';$('msg').textContent=err.message;$('msg').className='err';return}
+  }
+  F.region=-1;buildFilters();render();
+})();
+</script>
+</body>
+</html>
