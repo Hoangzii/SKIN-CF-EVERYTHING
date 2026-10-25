@@ -44,6 +44,7 @@ label.chk{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
 #tip table{border-collapse:collapse}
 #tip tr.rm td{color:#9a9a9a;text-decoration:line-through}
 #tip s{text-decoration:line-through}
+#tip .tip-ids{color:#fbdf89;font-weight:700;margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid rgba(251,223,137,.35);word-break:break-all}
 .name s{text-decoration:line-through}
 /* thẻ KHÔNG có nút: bỏ dải rỗng, khối xanh dưới hình cao bằng thẻ có nút; tên nằm chính giữa (ngang + dọc), cùng cỡ chữ/nền */
 .tgl:empty{display:none}
@@ -639,8 +640,10 @@ $('grid').addEventListener('mousemove',e=>{
   if(!it){tip.style.display='none';return}
   const r=ROWS[+it.dataset.i];
   const rows=REGIONS.map((g,i)=>r.reg[i]?`<tr${r.rm[i]?' class="rm"':''}><td>${esc(g.name)}</td><td>${regHTML(r,i)}</td></tr>`:'').join('');
-  if(!rows){tip.style.display='none';return}
-  tip.innerHTML=`<table>${rows}</table>`;
+  const ids=[...new Set((r.members?r.members.flatMap(m=>m.row.imgs||[]):(r.imgs||[])).filter(Boolean))];   // nhận diện = cột B, bỏ phần đứng trước BUYWEAPON_INFO_
+  const idsHTML=ids.length?`<div class="tip-ids"${rows?'':' style="margin:0;padding:0;border:0"'}>${ids.map(x=>esc(x.split(/[\\/]/).pop().replace(/\.(png|jpg|jpeg|webp)$/i,'').replace(/^.*?BUYWEAPON_INFO_/i,''))).join('<br>')}</div>`:'';
+  if(!rows&&!idsHTML){tip.style.display='none';return}
+  tip.innerHTML=idsHTML+(rows?`<table>${rows}</table>`:'');
   tip.style.display='block';
   let x=e.clientX+16,y=e.clientY+16;
   const w=tip.offsetWidth,h=tip.offsetHeight;
