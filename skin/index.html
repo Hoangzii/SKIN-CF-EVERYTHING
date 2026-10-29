@@ -142,6 +142,7 @@ const CFG = {
     { col:8, dir:'img/badges/',  pos:'L-tr', prefixes:['tag_',''] }                                                           // cột BADGES: ô ghi VVIP => img/badges/tag_VVIP.PNG
   ],
 
+  FILTER_LABELS: { 4:'VARIANT' },   // ép tên hiển thị của ô lọc theo số cột (không phụ thuộc tiêu đề trong Sheet)
   FILTERS: [2,3,4],              // TYPE (xổ ra danh sách WEAPON LIST bên cạnh, cột 3 không có ô riêng), VARIANT
   STRIP_PREFIX: 'BUYWEAPON_INFO_',   // tooltip chỉ hiện phần đứng sau tiền tố này
   DEFAULT_LABELS: ['Default','Silencer','Scope','Ext. Mag'],   // nếu ô cột B có 2+ tên => mỗi tên là 1 nút đổi hình (nhãn theo thứ tự, dùng khi tên file không khớp LABEL_RULES)
@@ -433,7 +434,7 @@ const TM={col:0,wc:0,types:[],kids:{},btn:null};
 const tmEl=()=>$('tm');
 function tmLabel(){
   const t=F['c'+TM.col],w=F['c'+TM.wc];
-  TM.btn.textContent=t?(w?t+' › '+w:t):(H[TM.col]||'TYPE');
+  TM.btn.textContent=t?(w?t+' › '+w:t):String(CFG.FILTER_LABELS[TM.col]||H[TM.col]||'TYPE').toUpperCase();
 }
 function tmClose(){tmEl().classList.remove('on')}
 function tmKids(t){
@@ -442,11 +443,15 @@ function tmKids(t){
   if(!k.length){p2.style.display='none';p2.dataset.t='';return}
   p2.dataset.t=t;
   p2.innerHTML=k.map(w=>`<div class="mi" data-t="${esc(t)}" data-w="${esc(w)}">${esc(w)}</div>`).join('');
-  p2.style.display='block';
+  p2.style.display='block';p2.style.marginTop='0px';
+  const a=tmEl().querySelector('.p1 .mi.act');
+  if(a){const er=tmEl().getBoundingClientRect(),ar=a.getBoundingClientRect();let mt=ar.top-er.top-1;
+    if(er.top+mt+p2.offsetHeight>innerHeight-8)mt=Math.max(0,innerHeight-8-er.top-p2.offsetHeight);
+    p2.style.marginTop=mt+'px'}   // menu con nằm ngang hàng với mục có mũi tên
 }
 function tmOpen(){
   const el=tmEl(),p1=el.querySelector('.p1'),r=TM.btn.getBoundingClientRect();
-  p1.innerHTML=TM.types.map(t=>`<div class="mi" data-t="${esc(t)}">${esc(t)}${(TM.kids[t]||[]).length?'<span class="ar">▶</span>':''}</div>`).join('');
+  p1.innerHTML='<div class="mi" data-all="1">ALL</div>'+TM.types.map(t=>`<div class="mi" data-t="${esc(t)}">${esc(t)}${(TM.kids[t]||[]).length?'<span class="ar">▶</span>':''}</div>`).join('');
   el.querySelector('.p2').style.display='none';el.querySelector('.p2').dataset.t='';
   p1.style.minWidth=Math.max(150,r.width)+'px';
   el.style.left=r.left+'px';el.style.top=(r.bottom+2)+'px';el.classList.add('on');
@@ -482,15 +487,19 @@ function buildFilters(){
     if(col===CFG.COL.type){box.appendChild(makeTypeMenu(col));return}
     const sel=document.createElement('select');
     sel.id='f'+col;sel.title=H[col]||'';
+    const lbl=String(CFG.FILTER_LABELS[col]||H[col]||('Col '+(col+1))).toUpperCase();
     const opts=uniq(ROWS.flatMap(r=>toks(r.raw[col])));
     if(!opts.length&&col===CFG.COL.weapon)return;   // chưa có dữ liệu WEAPON LIST => không hiện bộ lọc
-    sel.innerHTML=`<option value="" hidden>${esc(H[col]||('Col '+(col+1)))}</option>`+opts.map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join('');
-    sel.onchange=()=>{F['c'+col]=sel.value;state.page=1;render()};
+    sel.innerHTML=`<option value="" hidden>${esc(lbl)}</option><option value="">ALL</option>`+opts.map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join('');
+    sel.onchange=()=>{F['c'+col]=sel.value;if(!sel.value)sel.selectedIndex=0;   // ALL = bỏ lọc, nút quay về tên bộ lọc
+      state.page=1;render()};
     box.appendChild(sel);
   });
   const sr=document.createElement('select');sr.id='fRegion';
-  sr.innerHTML='<option value="-1" hidden>All regions</option>'+REGIONS.map((r,i)=>`<option value="${i}"${r.closed?' style="color:#999"':''}>${esc(r.name)}${r.closed?' (Removed)':''}</option>`).join('');
-  sr.onchange=()=>{F.region=+sr.value;state.page=1;render()};
+  sr.innerHTML='<option value="-1" hidden>ALL REGIONS</option><option value="-1">ALL</option>'+REGIONS.map((r,i)=>`<option value="${i}"${r.closed?' style="color:#999"':''}>${esc(r.name)}${r.closed?' (Removed)':''}</option>`).join('');
+  sr.onchange=()=>{F.region=+sr.value;
+    if(F.region<0){F.unique=false;const u=$('fUnique');if(u)u.checked=false;sr.selectedIndex=0}   // ALL = bỏ lọc khu vực
+    state.page=1;render()};
   box.appendChild(sr);
   const lb=document.createElement('label');lb.className='chk';
   lb.innerHTML='<input type="checkbox" id="fUnique"> Unique to the region';
@@ -583,6 +592,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')closeScope()});
 /* ================= KHỞI CHẠY (mỗi lần F5 tải lại Sheet) ================= */
 $('btnSearch').onclick=()=>{state.page=1;render()};
 $('q').addEventListener('keydown',e=>{if(e.key==='Enter'){state.page=1;render()}});
+$('q').addEventListener('input',(()=>{let t;return()=>{clearTimeout(t);t=setTimeout(()=>{state.page=1;render()},200)}})());   // gõ tới đâu lọc tới đó, không cần bấm Search
 $('btnReset').onclick=resetAll;
 
 (async function init(){

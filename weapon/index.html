@@ -25,6 +25,15 @@ label.chk{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
 #filters{flex-wrap:nowrap;overflow-x:auto;max-width:1600px;justify-content:stretch;align-items:center}
 #filters select{flex:1 1 0;min-width:0;max-width:none}
 #filters label.chk{flex:none;white-space:nowrap}
+#filters .tsel{flex:1 1 0;min-width:0;position:relative;padding:7px 28px 7px 10px;border:1px solid var(--line);border-radius:4px;background:var(--card);color:var(--tx);font-size:13px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;user-select:none}
+#filters .tsel::after{content:'▾';position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--sub)}
+.tm{position:fixed;z-index:70;display:none;align-items:flex-start;font-size:13px}
+.tm.on{display:flex}
+.tm .p1,.tm .p2,.tm .p3{background:var(--card);color:var(--tx);border:1px solid var(--line);box-shadow:0 6px 18px rgba(0,0,0,.25);max-height:70vh;overflow-y:auto;min-width:150px}
+.tm .p2,.tm .p3{display:none;margin-left:-1px}
+.tm .mi{display:flex;justify-content:space-between;gap:14px;padding:7px 12px;cursor:pointer;white-space:nowrap}
+.tm .mi:hover,.tm .mi.act{background:var(--accent);color:#fff}
+.tm .mi .ar{font-size:9px;opacity:.7;align-self:center}
 .grid{--gap:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(max(120px,calc((100% - 5*var(--gap))/6)),1fr));gap:var(--gap);max-width:1600px;margin:18px auto}
 .item{background:var(--card);border-top:3px solid var(--label);border-radius:2px;padding:10px 8px 0;display:flex;flex-direction:column;align-items:center;min-height:124px;position:relative;box-shadow:0 1px 3px rgba(0,0,0,.08);transition:transform .12s,box-shadow .12s}
 .item:hover{transform:translateY(-2px);box-shadow:0 4px 10px rgba(0,0,0,.18);border-top-color:var(--accent)}
@@ -136,10 +145,24 @@ const CFG = {
     // { tokens:['','_NT'],               labels:['regular','De-sign'] },   // hậu tố: ví dụ _NT thêm cuối tên file
     // { tokens:['_A','_B','_C'],         labels:['Một','Hai','Ba'] },     // 3 nút
   ],
-  CLOSED_REGIONS: ['Russia','Indonesia','Korea','Español','Europe','SEA','Japan','Taiwan'],   // khu vực đã ngừng hoạt động: mọi dữ liệu của cột này bị gạch ngang + xám. Hoặc ghi "Russia (Removed)" ngay tiêu đề cột trong Sheet.
+  CLOSED_REGIONS: ['Russia','Indonesia','Korea','South Korea','Español','Europe','SEA','Japan','Taiwan'],   // khu vực đã ngừng hoạt động: mọi dữ liệu của cột này bị gạch ngang + xám. Hoặc ghi "Russia (Removed)" ngay tiêu đề cột trong Sheet.
   CLOSED_FROM: 14,   // chỉ tiêu đề cột O (=14) trở đi (O–V) mà bị gạch ngang trong Sheet mới tính là khu vực đóng "(Closed)"
   REMOVED_WORDS: ['Removed','Closed'],   // từ đánh dấu ngừng hoạt động trong ô khu vực (thêm từ khác nếu cần, vd 'Đã gỡ')
   PER_PAGE: 24,
+  // Menu CLASS (cột F → G) và SPECIAL (cột H). Sửa tại đây nếu cần.
+  CLASS_LABEL: 'CLASS',
+  CLASS_MENU: [                            // thứ tự menu CLASS
+    {text:'ALL',type:'all'},                 // xoá hết bộ lọc (như Reset)
+    {text:'NORMAL'},                         // lọc cột F = NORMAL
+    {text:'VVIP',kidsKw:['VVIP','INFINITY','NON-VVIP']},  // cột F = VVIP, mũi tên → nhận diện từ khoá ở cột G
+    {text:'SVIP'},                           // lọc cột F = SVIP
+    {text:'NON-VVIP',type:'kw'},             // mọi vũ khí có chữ NON-VVIP ở cột F hoặc G
+    {text:'NOBLE GOLD',kids:['VVIP','NON-VVIP']},  // cột F = NOBLE GOLD, mũi tên → cột G
+    {text:'FIGURINE'}                        // lọc cột F = FIGURINE
+  ],
+  SPECIAL_LABEL: 'SPECIAL',
+  SPECIAL_BADGES: { BOLT:['PVE','NANO'] },  // mục BOLT chỉ hiện vũ khí có ĐỦ các thẻ này ở cột I (xoá dòng này nếu không cần)
+  SPECIAL_KEYS: ['PVE','NANO','BOLT'],     // lọc ô cột H có chứa từ khoá
   // Khoá Google Sheets API (miễn phí) - CHỈ cần nếu muốn web nhận định dạng GẠCH NGANG thật của ô trong Sheet (cột J–V).
   // Để trống '' thì web chỉ nhận chữ gạch ngang kiểu Unicode (R̶u̶s̶s̶i̶a̶) và chữ "Removed". Xem hướng dẫn tạo khoá trong tin nhắn.
   API_KEY: ''
@@ -546,13 +569,113 @@ function makeCombo(gi,g,lv,col){
   };
   return wrap;
 }
+/* ================= MENU XỔ NHIỀU CẤP (TYPE · CLASS · SPECIAL) =================
+   Mỗi nút = 1 menu; rê chuột vào mục có ▶ thì cấp con mở bên cạnh; bấm mục nào lọc theo mục đó. */
+const MENUS=[];
+const closeMenus=()=>MENUS.forEach(m=>m.el.classList.remove('on'));
+const tok=v=>String(v||'').split(/[\n\r;|]+/).map(x=>x.trim()).filter(Boolean);   // 1 ô có thể chứa nhiều giá trị (xuống dòng)
+function kwHas(text,key){                                                          // ô có chứa từ khoá (không phân biệt hoa/thường, dấu)
+  let t=nz(text),k=nz(key);
+  if(!/^non/.test(k))t=t.split('non-'+k).join(' ').split('non '+k).join(' ');      // "VVIP" không khớp "NON-VVIP"
+  return t.includes(k);
+}
+function makeFly(rootNodes,labelFn,onPick){
+  const el=document.createElement('div');el.className='tm';
+  el.innerHTML='<div class="p1"></div><div class="p2"></div><div class="p3"></div>';
+  document.body.appendChild(el);
+  const P=[1,2,3].map(n=>el.querySelector('.p'+n));
+  const btn=document.createElement('div');btn.className='tsel';btn.textContent=labelFn();
+  MENUS.push({el});
+  function show(d,nodes,parent,anchor){
+    if(d>2)return;
+    for(let i=d;i<3;i++){P[i].style.display='none';P[i].innerHTML='';P[i]._nodes=null;P[i]._parent=null}
+    if(!nodes||!nodes.length)return;
+    const p=P[d];p._nodes=nodes;p._parent=parent||null;
+    p.innerHTML=nodes.map((n,k)=>`<div class="mi" data-k="${k}">${esc(n.text)}${n.kids&&n.kids.length?'<span class="ar">▶</span>':''}</div>`).join('');
+    p.style.display='block';
+    p.style.marginTop='0px';
+    if(d>0&&anchor){   // căn cấp con ngang hàng với mục đang rê chuột
+      const er=el.getBoundingClientRect(),ar=anchor.getBoundingClientRect();
+      let mt=ar.top-er.top-1;
+      const h=p.offsetHeight;
+      if(er.top+mt+h>innerHeight-8)mt=Math.max(0,innerHeight-8-er.top-h);   // tránh tràn đáy màn hình
+      p.style.marginTop=mt+'px';
+    }
+  }
+  const open=()=>{
+    const r=btn.getBoundingClientRect();
+    show(0,rootNodes);P[0].style.minWidth=Math.max(150,r.width)+'px';
+    el.style.left=r.left+'px';el.style.top=(r.bottom+2)+'px';el.classList.add('on');
+  };
+  btn.onclick=()=>{const was=el.classList.contains('on');closeMenus();if(!was)open()};
+  el.addEventListener('mouseover',e=>{
+    const mi=e.target.closest('.mi');if(!mi)return;
+    const p=mi.parentNode,d=P.indexOf(p),n=p._nodes[+mi.dataset.k];
+    p.querySelectorAll('.mi').forEach(x=>x.classList.toggle('act',x===mi));
+    if(!(P[d+1]&&P[d+1]._parent===n))show(d+1,n.kids,n,mi);
+  });
+  el.addEventListener('click',e=>{
+    const mi=e.target.closest('.mi');if(!mi)return;
+    const p=mi.parentNode,d=P.indexOf(p),n=p._nodes[+mi.dataset.k];
+    if(n.kids&&n.kids.length&&(n.must||!(P[d+1]&&P[d+1]._parent===n))){show(d+1,n.kids,n,mi);return}   // cảm ứng: chạm lần 1 mở cấp con
+    onPick(n.sel);btn.textContent=labelFn();closeMenus();state.page=1;render();
+  });
+  return btn;
+}
+document.addEventListener('click',e=>{if(!e.target.closest('.tm,.tsel'))closeMenus()});
+addEventListener('resize',closeMenus);
+
+/* TYPE: C → D → E */
+function makeTypeMenu(){
+  const C=CFG.COL;
+  const nodes=uniq(ALLROWS.map(r=>r.raw[C.c])).map(t=>{
+    const rt=ALLROWS.filter(r=>r.raw[C.c]===t);
+    return {text:t,sel:{g10:t,g11:'',g12:''},kids:uniq(rt.map(r=>r.raw[C.d])).map(c=>({
+      text:c,sel:{g10:t,g11:c,g12:''},
+      kids:uniq(rt.filter(r=>r.raw[C.d]===c).map(r=>r.raw[C.e])).map(w=>({text:w,sel:{g10:t,g11:c,g12:w}}))
+    }))};
+  });
+  return makeFly(nodes,()=>F.g10?[F.g10,F.g11,F.g12].filter(Boolean).join(' › '):(H[C.c]||'TYPE'),
+    sel=>Object.assign(F,sel,{g10kw:'',g11kw:'',g12kw:''}));
+}
+/* CLASS: ALL (xoá hết bộ lọc) · NORMAL · VVIP · SVIP · NON-VVIP (từ khoá ở cột F/G) · NOBLE GOLD ▶ VVIP / NON-VVIP
+   Thứ tự & nội dung sửa tại CFG.CLASS_MENU. */
+function makeClassMenu(){
+  const C=CFG.COL,none={clsF:'',clsG:'',clsKw:'',clsGKw:''};
+  const allF=uniq(ALLROWS.flatMap(r=>tok(r.raw[C.f]))),allG=uniq(ALLROWS.flatMap(r=>tok(r.raw[C.g])));
+  const real=(list,name)=>list.find(x=>nz(x)===nz(name))||name;   // lấy đúng chữ hoa/thường như trong Sheet
+  const nodes=CFG.CLASS_MENU.map(m=>{
+    if(m.type==='all')return {text:m.text,sel:{reset:true}};
+    if(m.type==='kw')return {text:m.text,sel:{...none,clsKw:m.text}};
+    const f=real(allF,m.text);
+    const n={text:m.text,sel:{...none,clsF:f}};
+    if(m.kids)n.kids=m.kids.map(k=>{const g=real(allG,k);return {text:k,sel:{...none,clsF:f,clsG:g}}});
+    if(m.kidsKw)n.kids=m.kidsKw.map(k=>({text:k,sel:{...none,clsF:f,clsGKw:k}}));   // cấp con nhận diện theo TỪ KHOÁ của cột G
+    if(n.kids)n.must=true;   // mục có mũi tên (VVIP, NOBLE GOLD): bắt buộc chọn mục con, không chọn đơn
+    return n;
+  });
+  return makeFly(nodes,()=>F.clsKw||[F.clsF,F.clsG||F.clsGKw].filter(Boolean).join(' › ')||CFG.CLASS_LABEL,
+    sel=>{if(sel.reset){resetAll();return}Object.assign(F,sel)});
+}
+/* SPECIAL: cột H, lọc theo từ khoá PVE / NANO / BOLT */
+function makeSpecialMenu(){
+  const nodes=[{text:'ALL',sel:{spKw:''}},...CFG.SPECIAL_KEYS.map(k=>({text:k,sel:{spKw:k}}))];
+  return makeFly(nodes,()=>F.spKw||CFG.SPECIAL_LABEL,sel=>Object.assign(F,sel));
+}
+
 function buildFilters(){
-  cbHide();
+  cbHide();closeMenus();
+  MENUS.length=0;document.querySelectorAll('.tm').forEach(x=>x.remove());
   const box=$('filters');box.innerHTML='';
   GROUPS.forEach((g,gi)=>{
     g.cols.forEach((col,lv)=>{
       if(col>=H.length)return;
-      if(col===CFG.COL.e){box.appendChild(makeCombo(gi,g,lv,col));return}      // WEAPON LIST = ô tìm kiếm
+      if(gi===0){if(lv===0)box.appendChild(makeTypeMenu());return}     // C → D → E nằm gọn trong menu xổ của TYPE
+      if(gi===1){                                                       // F+G = CLASS ; H = SPECIAL
+        if(lv===0)box.appendChild(makeClassMenu());
+        else if(lv===2)box.appendChild(makeSpecialMenu());
+        return;
+      }
       const sel=document.createElement('select');
       sel.id=g.key+lv;sel.title=H[col]||'';
       sel.onchange=()=>{
@@ -565,8 +688,9 @@ function buildFilters(){
   });
   // Khu vực
   const sr=document.createElement('select');sr.id='fRegion';
-  sr.innerHTML='<option value="-1">All regions</option>'+REGIONS.map((r,i)=>`<option value="${i}"${r.closed?' style="color:#999"':''}>${esc(r.name)}${r.closed?' (Closed)':''}</option>`).join('');
-  sr.onchange=()=>{F.region=+sr.value;state.page=1;render()};box.appendChild(sr);
+  sr.innerHTML='<option value="-1">ALL REGIONS</option>'+REGIONS.map((r,i)=>`<option value="${i}"${r.closed?' style="color:#999"':''}>${esc(r.name)}${r.closed?' (Closed)':''}</option>`).join('');
+  sr.onchange=()=>{F.region=+sr.value;if(F.region<0){F.unique=false;const u=$('fUnique');if(u)u.checked=false}   // ALL REGIONS = bỏ lọc khu vực
+    state.page=1;render()};box.appendChild(sr);
   const lb=document.createElement('label');lb.className='chk';
   lb.innerHTML='<input type="checkbox" id="fUnique"> Unique to the region';
   lb.querySelector('input').onchange=e=>{F.unique=e.target.checked;state.page=1;render()};
@@ -593,6 +717,17 @@ function filtered(){
   const reg=F.region==null?-1:F.region;
   const pass=r=>{
     for(const g of GROUPS)for(let l=0;l<g.cols.length;l++){const v=F[g.key+l];if(v&&r.raw[g.cols[l]]!==v)return false;const kw=F[g.key+l+'kw'];if(kw&&!kwMatch(r.raw[g.cols[l]],kw))return false}
+    const K=CFG.COL;
+    if(F.clsKw&&!(kwHas(r.raw[K.f],F.clsKw)||kwHas(r.raw[K.g],F.clsKw)))return false;
+    if(F.clsF&&!tok(r.raw[K.f]).includes(F.clsF))return false;
+    if(F.clsG&&!tok(r.raw[K.g]).includes(F.clsG))return false;
+    if(F.clsGKw&&!kwHas(r.raw[K.g],F.clsGKw))return false;   // từ khoá cột G (VVIP không khớp NON-VVIP)
+    if(F.spKw){
+      const need=CFG.SPECIAL_BADGES[F.spKw];
+      const hit=need?need.every(k=>kwHas(r.raw[K.badges],k))                                  // BOLT: thẻ cột I phải có ĐỦ cả PVE và NANO
+               :(kwHas(r.raw[K.h],F.spKw)||kwHas(r.raw[K.badges],F.spKw));                    // PVE / NANO: ô cột H hoặc thẻ cột I
+      if(!hit)return false;
+    }
     if(F.badge&&!r.badges.includes(F.badge))return false;
     if(reg>=0&&!r.reg[reg])return false;                  // có ở khu vực đang chọn
     if(reg>=0&&F.unique&&r.reg.some((x,i)=>i!==reg&&x))return false; // chỉ có ở khu vực này
@@ -656,6 +791,7 @@ $('grid').addEventListener('mouseleave',()=>tip.style.display='none');
 /* ================= KHỞI CHẠY (mỗi lần F5 tải lại Sheet) ================= */
 $('btnSearch').onclick=()=>{state.page=1;render()};
 $('q').addEventListener('keydown',e=>{if(e.key==='Enter'){state.page=1;render()}});
+$('q').addEventListener('input',(()=>{let t;return()=>{clearTimeout(t);t=setTimeout(()=>{state.page=1;render()},200)}})());   // gõ tới đâu lọc tới đó, không cần bấm Search
 $('btnReset').onclick=resetAll;
 
 function dataJsFallback(){
