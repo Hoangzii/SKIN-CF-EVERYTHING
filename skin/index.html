@@ -26,6 +26,15 @@ label.chk{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
 #filters{flex-wrap:nowrap;overflow-x:auto;max-width:1600px;justify-content:stretch;align-items:center}
 #filters select{flex:1 1 0;min-width:0;max-width:none}
 #filters label.chk{flex:none;white-space:nowrap}
+#filters .tsel{flex:1 1 0;min-width:0;position:relative;padding:7px 28px 7px 10px;border:1px solid var(--line);border-radius:4px;background:var(--card);color:var(--tx);font-size:13px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;user-select:none}
+#filters .tsel::after{content:'▾';position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--sub)}
+#tm{position:fixed;z-index:70;display:none;align-items:flex-start;font-size:13px}
+#tm.on{display:flex}
+#tm .p1,#tm .p2{background:var(--card);color:var(--tx);border:1px solid var(--line);box-shadow:0 6px 18px rgba(0,0,0,.25);max-height:70vh;overflow-y:auto;min-width:150px}
+#tm .p2{display:none;margin-left:-1px}
+#tm .mi{display:flex;justify-content:space-between;gap:14px;padding:7px 12px;cursor:pointer;white-space:nowrap}
+#tm .mi:hover,#tm .mi.act{background:var(--accent);color:#fff}
+#tm .mi .ar{font-size:9px;opacity:.7;align-self:center}
 
 .grid{--gap:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(max(120px,calc((100% - 5*var(--gap))/6)),1fr));gap:var(--gap);max-width:1600px;margin:18px auto}
 .item{background:var(--card);border-top:3px solid var(--label);border-radius:2px;padding:10px 8px 0;display:flex;flex-direction:column;align-items:center;min-height:124px;position:relative;box-shadow:0 1px 3px rgba(0,0,0,.08);transition:transform .12s,box-shadow .12s}
@@ -94,6 +103,7 @@ label.chk{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
 <div class="grid" id="grid"></div>
 <div class="pager" id="pager"></div>
 <div id="tip"></div>
+<div id="tm"><div class="p1"></div><div class="p2"></div></div>
 <div id="sp"></div>
 <div id="modal"><div class="box"><div id="mimg"></div><span class="x" id="mx">X</span></div></div>
 
@@ -118,18 +128,21 @@ const CFG = {
   EXTS     : ['.png','.webp','.jpg','.PNG'],   // thử lần lượt các đuôi file
 
   // ---- Chỉ số cột (A=0) ----
-  COL: { name:0, image:1, type:2, variant:3, scope:4, regionFrom:8, regionTo:20 },   // A=WEAPON NAME, B=IMAGE, C=TYPE, D=VARIANT, E=SCOPE, I..U = khu vực
+  // Bố cục CHUẨN nội bộ (web tự xếp lại cột của Sheet theo TÊN TIÊU ĐỀ nên bạn chèn/đổi vị trí cột trong Sheet vẫn đúng):
+  //   0=WEAPON NAME, 1=IMAGE, 2=TYPE, 3=WEAPON LIST, 4=VARIANT, 5=SCOPE, 6=SKIN, 7=SKIN TAG, 8=BADGES, 9..21 = khu vực
+  COL: { name:0, image:1, type:2, weapon:3, variant:4, scope:5, regionFrom:9, regionTo:21 },
+  REGION_COUNT: 13,              // số cột khu vực tối đa đọc sau cột BADGES
 
   // ---- Các lớp hình phủ lên ảnh vũ khí: col = cột trong Sheet, dir = thư mục, pos = vị trí trên thẻ ----
   // prefixes = tiền tố tên file thử lần lượt. Ô có nhiều giá trị (cách nhau , ; hoặc xuống dòng) => hiện nhiều hình. Chữ hoa/thường không quan trọng.
   LAYERS: [
     // fallback = thư mục tìm tiếp nếu không thấy hình ở dir (ví dụ ô ghi NANO / PVE / SVIP / VVIP / SKINMARK => icon trong img/badges/tag_xxx.PNG)
-    { col:5, dir:'img/SKIN/',    pos:'L-bl', prefixes:[''],            fallback:[{dir:'img/badges/',prefixes:['tag_','']}] },   // cột F (SKIN): ô ghi 70KG          => img/SKIN/70KG.PNG        (hình skin ở góc dưới-trái)
-    { col:6, dir:'img/SKINTAG/', pos:'L-tl', prefixes:['','SkinTag_'], fallback:[{dir:'img/badges/',prefixes:['tag_','']}] },   // cột G (SKIN TAG): ô ghi SkinTag_70KG => img/SKINTAG/SkinTag_70KG.PNG (dải tag góc trên-trái)
-    { col:7, dir:'img/badges/',  pos:'L-tr', prefixes:['tag_',''] }                                                           // cột H (BADGES): ô ghi VVIP => img/badges/tag_VVIP.PNG
+    { col:6, dir:'img/SKIN/',    pos:'L-bl', prefixes:[''],            fallback:[{dir:'img/badges/',prefixes:['tag_','']}] },   // cột SKIN: ô ghi 70KG          => img/SKIN/70KG.PNG        (hình skin ở góc dưới-trái)
+    { col:7, dir:'img/SKINTAG/', pos:'L-tl', prefixes:['','SkinTag_'], fallback:[{dir:'img/badges/',prefixes:['tag_','']}] },   // cột SKIN TAG: ô ghi SkinTag_70KG => img/SKINTAG/SkinTag_70KG.PNG (dải tag góc trên-trái)
+    { col:8, dir:'img/badges/',  pos:'L-tr', prefixes:['tag_',''] }                                                           // cột BADGES: ô ghi VVIP => img/badges/tag_VVIP.PNG
   ],
 
-  FILTERS: [2,3],                // các cột làm bộ lọc, theo thứ tự hiển thị (C = TYPE, D = VARIANT)
+  FILTERS: [2,3,4],              // TYPE (xổ ra danh sách WEAPON LIST bên cạnh, cột 3 không có ô riêng), VARIANT
   STRIP_PREFIX: 'BUYWEAPON_INFO_',   // tooltip chỉ hiện phần đứng sau tiền tố này
   DEFAULT_LABELS: ['Default','Silencer','Scope','Ext. Mag'],   // nếu ô cột B có 2+ tên => mỗi tên là 1 nút đổi hình (nhãn theo thứ tự, dùng khi tên file không khớp LABEL_RULES)
   // Nhãn nút tự nhận theo tên file (cột B). Tên file chứa từ khóa => dùng nhãn tương ứng. Hình đầu tiên luôn là "Default".
@@ -193,6 +206,24 @@ function parseTable(t){
   let headers=t.cols.map(c=>(c.label||'').trim());
   let rows=t.rows.map(r=>{const a=[];for(let i=0;i<t.cols.length;i++)a.push(cellStr(r.c&&r.c[i]));return a});
   if(headers.every(h=>!h)&&rows.length){headers=rows.shift()}
+  return {headers,rows};
+}
+
+/* ===== Xếp lại cột của từng tab theo TÊN TIÊU ĐỀ về bố cục chuẩn (CFG.COL) ===== */
+function canon(t){
+  const nz=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  const hn=t.headers.map(nz);
+  const find=(...al)=>hn.findIndex(h=>h&&al.includes(h));
+  const ix={name:find('weaponname','name'),image:find('image'),type:find('type'),weapon:find('weaponlist'),
+            variant:find('variant'),scope:find('scope'),skin:find('skin'),skintag:find('skintag'),badges:find('badges')};
+  if(ix.name<0||ix.image<0||ix.type<0||ix.badges<0)   // không nhận ra tiêu đề => dùng bố cục cũ A..H
+    Object.assign(ix,{name:0,image:1,type:2,variant:3,scope:4,skin:5,skintag:6,badges:7,weapon:-1});
+  const order=[ix.name,ix.image,ix.type,ix.weapon,ix.variant,ix.scope,ix.skin,ix.skintag,ix.badges];
+  const dflt=['WEAPON NAME','IMAGE','TYPE','WEAPON LIST','VARIANT','SCOPE','SKIN','SKIN TAG','BADGES'];
+  const rs=ix.badges+1,n=Math.max(0,Math.min(CFG.REGION_COUNT,t.headers.length-rs));
+  const regs=Array.from({length:n},(_,k)=>rs+k);
+  const headers=[...order.map((i,k)=>i>=0?(t.headers[i]||dflt[k]):dflt[k]),...regs.map(i=>t.headers[i]||'')];
+  const rows=t.rows.map(r=>[...order.map(i=>i>=0?(r[i]||''):''),...regs.map(i=>r[i]||'')]);
   return {headers,rows};
 }
 
@@ -397,13 +428,62 @@ $('grid').addEventListener('click',e=>{
 });
 
 /* ================= BỘ LỌC ================= */
+/* ---- TYPE xổ ra WEAPON LIST (menu 2 cấp) ---- */
+const TM={col:0,wc:0,types:[],kids:{},btn:null};
+const tmEl=()=>$('tm');
+function tmLabel(){
+  const t=F['c'+TM.col],w=F['c'+TM.wc];
+  TM.btn.textContent=t?(w?t+' › '+w:t):(H[TM.col]||'TYPE');
+}
+function tmClose(){tmEl().classList.remove('on')}
+function tmKids(t){
+  const p2=tmEl().querySelector('.p2'),k=TM.kids[t]||[];
+  tmEl().querySelectorAll('.p1 .mi').forEach(x=>x.classList.toggle('act',x.dataset.t===t));
+  if(!k.length){p2.style.display='none';p2.dataset.t='';return}
+  p2.dataset.t=t;
+  p2.innerHTML=k.map(w=>`<div class="mi" data-t="${esc(t)}" data-w="${esc(w)}">${esc(w)}</div>`).join('');
+  p2.style.display='block';
+}
+function tmOpen(){
+  const el=tmEl(),p1=el.querySelector('.p1'),r=TM.btn.getBoundingClientRect();
+  p1.innerHTML=TM.types.map(t=>`<div class="mi" data-t="${esc(t)}">${esc(t)}${(TM.kids[t]||[]).length?'<span class="ar">▶</span>':''}</div>`).join('');
+  el.querySelector('.p2').style.display='none';el.querySelector('.p2').dataset.t='';
+  p1.style.minWidth=Math.max(150,r.width)+'px';
+  el.style.left=r.left+'px';el.style.top=(r.bottom+2)+'px';el.classList.add('on');
+}
+function makeTypeMenu(col){
+  const wc=CFG.COL.weapon;
+  TM.col=col;TM.wc=wc;
+  TM.types=uniq(ROWS.flatMap(r=>toks(r.raw[col])));
+  TM.kids={};
+  TM.types.forEach(t=>{TM.kids[t]=uniq(ROWS.filter(r=>toks(r.raw[col]).includes(t)).flatMap(r=>toks(r.raw[wc])))});
+  const b=document.createElement('div');b.className='tsel';b.id='fType';TM.btn=b;tmLabel();
+  b.onclick=()=>tmEl().classList.contains('on')?tmClose():tmOpen();
+  return b;
+}
+(function(){
+  const el=$('tm');
+  el.addEventListener('mouseover',e=>{const m=e.target.closest('.p1 .mi');if(m&&m.dataset.t)tmKids(m.dataset.t);else if(m)tmKids('')});
+  el.addEventListener('click',e=>{
+    const m=e.target.closest('.mi');if(!m)return;
+    const t=m.dataset.t||'',w=m.dataset.w||'',p2=el.querySelector('.p2');
+    if(m.closest('.p1')&&t&&(TM.kids[t]||[]).length&&p2.dataset.t!==t){tmKids(t);return}   // cảm ứng: chạm lần 1 mở danh sách con
+    F['c'+TM.col]=t;F['c'+TM.wc]=w;state.page=1;tmLabel();tmClose();render();
+  });
+  document.addEventListener('click',e=>{if(!el.contains(e.target)&&!(TM.btn&&TM.btn.contains(e.target)))tmClose()});
+  addEventListener('resize',tmClose);
+})();
+
 function buildFilters(){
   const box=$('filters');box.innerHTML='';
   CFG.FILTERS.forEach(col=>{
     if(col>=H.length)return;
+    if(col===CFG.COL.weapon)return;                       // WEAPON LIST nằm trong menu xổ của TYPE
+    if(col===CFG.COL.type){box.appendChild(makeTypeMenu(col));return}
     const sel=document.createElement('select');
     sel.id='f'+col;sel.title=H[col]||'';
     const opts=uniq(ROWS.flatMap(r=>toks(r.raw[col])));
+    if(!opts.length&&col===CFG.COL.weapon)return;   // chưa có dữ liệu WEAPON LIST => không hiện bộ lọc
     sel.innerHTML=`<option value="" hidden>${esc(H[col]||('Col '+(col+1)))}</option>`+opts.map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join('');
     sel.onchange=()=>{F['c'+col]=sel.value;state.page=1;render()};
     box.appendChild(sel);
@@ -523,7 +603,7 @@ $('btnReset').onclick=resetAll;
     const ok=[],sig=new Set(),missing=[];
     res.forEach((x,i)=>{
       if(x.status!=='fulfilled')return;
-      const t=parseTable(x.value);
+      const t=canon(parseTable(x.value));
       // Khi tên tab không tồn tại, Google trả về tab đầu tiên => nhận ra bằng nội dung trùng với tab đã đọc và bỏ qua
       const sg=t.rows.slice(0,8).map(r=>r.join('\u0001')).join('\u0002');
       if(t.rows.length&&sig.has(sg)){missing.push(refs[i]||'(đầu tiên)');return}
