@@ -503,7 +503,7 @@ function buildFilters(){
     state.page=1;render()};
   box.appendChild(sr);
   const lb=document.createElement('label');lb.className='chk';
-  lb.innerHTML='<input type="checkbox" id="fUnique"> Unique to the region';
+  lb.innerHTML='<input type="checkbox" id="fUnique"> Exclusive Distributor';
   lb.querySelector('input').onchange=e=>{F.unique=e.target.checked;state.page=1;render()};
   box.appendChild(lb);
 }

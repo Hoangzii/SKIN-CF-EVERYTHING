@@ -692,7 +692,7 @@ function buildFilters(){
   sr.onchange=()=>{F.region=+sr.value;if(F.region<0){F.unique=false;const u=$('fUnique');if(u)u.checked=false}   // ALL REGIONS = bỏ lọc khu vực
     state.page=1;render()};box.appendChild(sr);
   const lb=document.createElement('label');lb.className='chk';
-  lb.innerHTML='<input type="checkbox" id="fUnique"> Unique to the region';
+  lb.innerHTML='<input type="checkbox" id="fUnique"> Exclusive distributor';
   lb.querySelector('input').onchange=e=>{F.unique=e.target.checked;state.page=1;render()};
   box.appendChild(lb);
   refreshCascade();
