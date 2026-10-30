@@ -422,12 +422,9 @@ function variantInfo(r){
 const allRemoved=row=>{const a=row.reg.map((v,i)=>v?row.rm[i]:null).filter(x=>x!==null);return a.length>0&&a.every(Boolean)};   // mọi khu vực có dữ liệu đều Removed
 const removedIn=row=>{const g=F.region==null?-1:F.region;return g>=0?!!row.rm[g]:allRemoved(row)};
 function titleOf(row){
-  const reg=F.region==null?-1:F.region;
-  return (reg>=0&&row.reg[reg])||row.name;
+  return row.name;   // luôn hiện Weapon Name (cột A), dù chọn khu vực nào
 }
 function titleHTML(row){
-  const reg=F.region==null?-1:F.region;
-  if(reg>=0&&row.reg[reg]){const sg=row.segs&&row.segs[reg];return sg?segHTML(sg):esc(row.reg[reg])}
   return esc(row.name);
 }
 function buildEntries(list){
