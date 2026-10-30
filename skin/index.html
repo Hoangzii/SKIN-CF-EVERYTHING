@@ -60,7 +60,9 @@ label.chk{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
 .tgl button{flex:1 1 0;min-width:0;height:18px;white-space:nowrap;font-size:8px;font-weight:500;line-height:1;padding:4px 1px;border:1px solid var(--accent);border-radius:4px;background:var(--card);color:var(--accent)}
 .tgl button.on{background:var(--accent);color:#fff;font-weight:600}
 .foot{margin-top:auto;width:calc(100% + 16px);min-height:48px;display:flex;flex-direction:column;background:var(--label);color:var(--label-tx)}
-.name{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;font-size:10px;font-weight:600;padding:5px 4px;line-height:1.25}
+.name{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;font-size:11px;font-weight:600;padding:5px 4px;line-height:1.25}
+.name>span{display:block;text-align:center}
+.name .pr{display:inline-block}   /* cụm (...) là 1 khối: vừa dòng thì nằm cùng dòng, dài quá thì xuống dòng và căn giữa */
 
 .pager{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;font-size:13px;margin-top:10px}
 .pager input{width:64px}
@@ -233,6 +235,7 @@ let H=[],ROWS=[],REGIONS=[],state={page:1,per:CFG.PER_PAGE};
 const F={};
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const nameHtml=t=>{t=String(t);const k=t.indexOf(' (');return k>0?esc(t.slice(0,k))+' <span class="pr">'+esc(t.slice(k+1))+'</span>':esc(t)};
 const toks=v=>String(v||'').split(/[,;\n|]+/).map(x=>x.trim()).filter(Boolean);
 const uniq=a=>[...new Set(a.filter(Boolean))];
 
@@ -413,7 +416,7 @@ function cardHTML(r){
   const tg=r.imgs.length>1
     ?`<div class="tgl" style="display:flex">${r.imgs.map((x,j)=>`<button class="${j?'':'on'}" data-j="${j}">${esc(r.labels&&r.labels[j]||btnLabel(x,j))}</button>`).join('')}</div>`
     :'<div class="tgl"></div>';
-  return `<div class="item" data-i="${r._i}"><div class="pic">${imgTag(weaponSrcList(r.img,r),'w',title,k)||'<div class="noimg">(no image)</div>'}${ly}${sc}</div><div class="foot">${tg}<div class="name">${esc(title)}</div></div></div>`;
+  return `<div class="item" data-i="${r._i}"><div class="pic">${imgTag(weaponSrcList(r.img,r),'w',title,k)||'<div class="noimg">(no image)</div>'}${ly}${sc}</div><div class="foot">${tg}<div class="name"><span>${nameHtml(title)}</span></div></div></div>`;
 }
 
 /* ---- nút đổi hình khi cột B có nhiều tên ---- */
