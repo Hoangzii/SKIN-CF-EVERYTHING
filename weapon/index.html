@@ -40,12 +40,14 @@ label.chk{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
 .item .pic{height:100px;width:100%;display:flex;align-items:center;justify-content:center}
 .item img.w{max-width:100%;max-height:100px;object-fit:contain}
 .item .noimg{font-size:11px;color:var(--sub)}
-.tgl{display:flex;gap:6px;justify-content:center;align-items:center;margin:auto -8px 0;width:calc(100% + 16px);min-height:34px;padding:6px 4px 2px;background:var(--label)}   /* dải xanh dưới hình: luôn có (kể cả không có nút) để mọi thẻ giống nhau */
-.tgl button{font-size:9px;line-height:1;padding:5px 10px;border:1px solid var(--accent);border-radius:4px;background:var(--card);color:var(--accent);cursor:pointer}
-.tgl button.on{background:var(--accent);color:#fff}
+.tgl{display:none;flex-wrap:nowrap;gap:3px;justify-content:center;margin:0;padding:6px 6px 0;width:100%}
+.tgl button{flex:1 1 0;min-width:0;height:18px;white-space:nowrap;font-size:8px;font-weight:500;line-height:1;padding:4px 1px;border:1px solid var(--accent);border-radius:4px;background:var(--card);color:var(--accent);cursor:pointer}
+.tgl button.on{background:var(--accent);color:#fff;font-weight:600}
+.foot{margin-top:auto;width:calc(100% + 16px);min-height:48px;display:flex;flex-direction:column;background:var(--label);color:var(--label-tx)}
 .badges{position:absolute;left:8px;top:88px;display:flex;gap:4px;margin:0;min-height:0;z-index:1}   /* cố định góc dưới-trái vùng hình (top = 10px padding + 100px hình - 22px) */
 .badges img{width:20px;height:20px;object-fit:contain}
-.name{margin-top:0;width:calc(100% + 16px);background:var(--label);color:var(--label-tx);text-align:center;font-size:10px;font-weight:600;padding:4px 6px 8px;line-height:1.3}
+.name{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;font-size:10px;font-weight:600;padding:5px 4px;line-height:1.25}
+.name>span{display:block;text-align:center}
 .pager{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;font-size:13px;margin-top:10px}
 .pager input{width:64px}
 .pager .on{background:var(--accent);color:#fff;border-color:var(--accent)}
@@ -55,9 +57,6 @@ label.chk{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
 #tip s{text-decoration:line-through}
 #tip .tip-ids{color:#fbdf89;font-weight:700;margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid rgba(251,223,137,.35);word-break:break-all}
 .name s{text-decoration:line-through}
-/* thẻ KHÔNG có nút: bỏ dải rỗng, khối xanh dưới hình cao bằng thẻ có nút; tên nằm chính giữa (ngang + dọc), cùng cỡ chữ/nền */
-.tgl:empty{display:none}
-.item:has(.tgl:empty) .name{margin-top:auto;min-height:62px;display:flex;align-items:center;justify-content:center;padding:6px}
 /* ô tìm kiếm WEAPON LIST */
 .cb{position:relative;flex:1 1 0;min-width:0}
 .cb input{width:100%;padding-right:24px}
@@ -71,6 +70,7 @@ label.chk{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
 #tip td:first-child{text-align:right;font-weight:700;padding-right:14px;white-space:nowrap}
 #msg{text-align:center;color:var(--sub);padding:30px;font-size:14px}
 #msg.err{color:#d4380d}
+#msg:empty,.ver:empty{display:none}   /* ẩn khoảng trống khi không có thông báo */
 </style>
 </head>
 <body>
@@ -103,7 +103,7 @@ const CFG = {
   // đặt dấu # đầu dòng để tạm tắt). Thêm tab mới chỉ cần thêm 1 dòng ở tab TABS, KHÔNG phải sửa file này.
   TAB_LIST: 'TABS',
   // Cách 2 (dự phòng nếu chưa có tab TABS): liệt kê tên tab hoặc gid ở đây.
-  SHEETS: ['2098056846' , '953162863' /* RIFLE */ /*, 'SNIPER', 'SMG', 'SHOTGUN', 'MG' */],
+  SHEETS: ['2098056846' , '953162863' , '1009811895' /* RIFLE */ /*, 'SNIPER', 'SMG', 'SHOTGUN', 'MG' */],
   IMG_DIR  : 'img/',
   // Hình có thể nằm trong thư mục con của Img/ (vd Img/RIFLE/, Img/SNIPER/). Trang tự thử: thư mục trùng với cột TYPE (C) / CATEGORIZED (D)
   // của dòng đó trước, rồi thư mục gốc Img/, rồi các thư mục trong danh sách dưới đây. Thêm tên thư mục mới vào đây nếu cần.
@@ -474,7 +474,7 @@ $('grid').addEventListener('click',e=>{
     const row=m.row,title=titleOf(row);
     it.dataset.i=ROWS.indexOf(row);it.classList.toggle('rm',removedIn(row));
     it.querySelector('.pic').innerHTML=imgTag(weaponSrcList(row.img,row),'w',title)||'<div class="noimg">(no image)</div>';
-    it.querySelector('.name').innerHTML=titleHTML(row);
+    it.querySelector('.name>span').innerHTML=titleHTML(row);
     it.querySelector('.badges').innerHTML=row.badges.map(x=>imgTag(badgeSrcList(x),'b',x)).join('');
     it.querySelectorAll('.tgl button').forEach(x=>x.classList.toggle('on',x===b));
     return;
@@ -745,9 +745,10 @@ function render(){
     const title=titleOf(r);
     return `<div class="item${removedIn(r)?' rm':''}" data-i="${ROWS.indexOf(r)}">
       <div class="pic">${imgTag(weaponSrcList(r.img,r),'w',title)||'<div class="noimg">(no image)</div>'}</div>
-      ${(vi=>vi?`<div class="tgl" style="display:flex">${vi.labels.map((l,j)=>`<button class="${j?'':'on'}" data-j="${j}">${esc(l)}</button>`).join('')}</div>`:'<div class="tgl"></div>')(en.members?{labels:en.members.map(m=>en.ru.labels[m.j]||en.ru.tokens[m.j]||'#')}:variantInfo(r))}
+      <div class="foot">${(vi=>vi?`<div class="tgl" style="display:flex">${vi.labels.map((l,j)=>`<button class="${j?'':'on'}" data-j="${j}">${esc(l)}</button>`).join('')}</div>`:'<div class="tgl"></div>')(en.members?{labels:en.members.map(m=>en.ru.labels[m.j]||en.ru.tokens[m.j]||'#')}:variantInfo(r))}
+      <div class="name"><span>${titleHTML(r)}</span></div></div>
       <div class="badges">${r.badges.map(b=>imgTag(badgeSrcList(b),'b',b)).join('')}</div>
-      <div class="name">${titleHTML(r)}</div></div>`;
+      </div>`;
   }).join('');
   [...$('grid').children].forEach((el,k)=>{el._g=slice[k].members?slice[k]:null});
   // pager
@@ -823,7 +824,7 @@ function dataJsFallback(){
     const seen=new Set();                               // bỏ dòng trùng hệt nhau (phòng khi 1 tab bị đọc 2 lần)
     const allRows=ok.flatMap(x=>x.rows).filter(r=>{const k=r.join('\u0001');if(seen.has(k))return false;seen.add(k);return true});
     build(ok[0].headers,allRows);                       // gộp mọi tab, tiêu đề lấy từ tab đầu tiên
-    $('ver').textContent='Dữ liệu trực tiếp từ Google Sheets · '+ok.length+' tab · '+ROWS.length+' vũ khí · F5 để cập nhật'+(bad.length?' · KHÔNG đọc được tab: '+bad.join(', '):'')+stNote;
+    $('ver').textContent=((bad.length?'KHÔNG đọc được tab: '+bad.join(', '):'')+stNote).replace(/^ · /,'');   // dòng thông tin thường đã ẩn; chỉ hiện khi có cảnh báo
   }catch(err){
     const fb=dataJsFallback();
     if(fb){build(fb.headers,fb.rows);$('ver').textContent='Đang dùng dữ liệu dự phòng từ data.js ('+err.message+')'}
