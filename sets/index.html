@@ -70,9 +70,14 @@
 const CONFIG = {
   SHEET_ID: '1GVgZrCybnuEdGPtVE33NMCmwRWSqfgLHIuz2XAXxhoc',   // phần giữa /d/ và /edit trong link sheet
   WEAPON_TABS: ['RIFLE','SNIPER','SMG','MG','SHOTGUN','PISTOL','MELEE','THROW'],
-  SETS_TAB: 'WEAPON SETS',   // A: SET NAME | B: GROUP | C: EXTRA KEYWORDS (cách nhau ;) | D: EXCLUDE (cách nhau ;)
-  IMAGE_DIR: '/weapon/img/',      // thư mục chứa ảnh BUYWEAPON_INFO_*
-  IMAGE_EXT: '.png',         // đuôi ảnh
+  SETS_TAB: 'WEAPON SETS',   // A: SET NAME (dùng để nhận diện vũ khí thuộc set) | B: GROUP. Cột C, D không còn dùng.
+  // Ảnh vũ khí: dùng chung thư mục ảnh của trang /weapon/ (không cần cột ảnh riêng ở tab WEAPON SETS).
+  // Cách tìm giống hệt trang Weapon: thêm tiền tố BUYWEAPON_INFO_ nếu thiếu, thử thư mục theo cột C/D của dòng vũ khí,
+  // thư mục gốc img/, rồi các thư mục con bên dưới; thử cả đuôi .PNG/.png; khớp hoa/thường nhờ /weapon/manifest.json.
+  WEAPON_BASE: location.protocol === 'file:' ? '../weapon/' : '/weapon/',   // mở file trực tiếp từ máy: ../weapon/ ; trên web: /weapon/
+  IMG_DIR: 'img/',
+  IMG_SUBDIRS: ['RIFLE','SNIPER','SMG','SHOTGUN','MG','PISTOL','MELEE','GRENADE','FLASHBANG','SMOKE'],
+  IMG_PREFIX: 'BUYWEAPON_INFO',
   BADGE_DIR: 'images/badges/', // thư mục chứa ảnh badge
   BADGE_EXT: '.png'          // đuôi ảnh badge
   // Badge: thêm 1 cột có tiêu đề "BADGES" (ở tab vũ khí và/hoặc tab WEAPON SETS),
@@ -99,14 +104,29 @@ function parseCSV(text){
   return rows;
 }
 
-async function loadTab(name){
-  const url = `https://docs.google.com/spreadsheets/d/${CONFIG.SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(name)}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(name + ': HTTP ' + res.status);
-  const all = parseCSV(await res.text());
-  const header = (all[0] || []).map(h => (h || '').trim().toUpperCase());
-  const badgeCol = header.findIndex(h => h === 'BADGES' || h === 'BADGE');
-  return {rows: all.slice(1), badgeCol};
+/* Đọc Google Sheet bằng JSONP (thẻ <script>) — chạy được cả khi mở file trực tiếp từ ổ đĩa (file://), fetch thì bị chặn */
+let __gsN = 0;
+const cellStr = c => c == null || c.v == null ? '' : String(c.f != null && typeof c.v === 'number' ? c.f : c.v).trim();
+function loadTab(name){
+  return new Promise((resolve, reject) => {
+    const cb = '__gs' + (++__gsN) + '_' + Date.now();
+    const s = document.createElement('script');
+    let timer;
+    const cleanup = () => { clearTimeout(timer); delete window[cb]; s.remove(); };
+    timer = setTimeout(() => { cleanup(); reject(new Error(name + ': hết thời gian chờ')); }, 15000);
+    window[cb] = r => {
+      cleanup();
+      if (!r || r.status !== 'ok') return reject(new Error(name + ': ' + JSON.stringify((r && r.errors) || r)));
+      const t = r.table;
+      let headers = t.cols.map(c => (c.label || '').trim().toUpperCase());
+      const rows = t.rows.map(rw => t.cols.map((_, i) => cellStr(rw.c && rw.c[i])));
+      if (headers.every(h => !h) && rows.length) headers = rows.shift().map(h => h.trim().toUpperCase());
+      resolve({rows, badgeCol: headers.findIndex(h => h === 'BADGES' || h === 'BADGE')});
+    };
+    s.onerror = () => { cleanup(); reject(new Error(name + ': không tải được (sai tên tab, chưa chia sẻ hoặc mất mạng)')); };
+    s.src = `https://docs.google.com/spreadsheets/d/${CONFIG.SHEET_ID}/gviz/tq?sheet=${encodeURIComponent(name)}&headers=1&tqx=out:json;responseHandler:${cb}&_=${Date.now()}`;
+    document.head.appendChild(s);
+  });
 }
 
 function splitBadges(cell){
@@ -118,19 +138,48 @@ function badgesTag(list){
     `<img src="${CONFIG.BADGE_DIR}${b}${CONFIG.BADGE_EXT}" alt="${b}" title="${b}" onerror="this.remove()">`).join('') + '</div>';
 }
 
+/* Cột B của tab vũ khí: giống trang Weapon — tách bằng , ; | hoặc xuống dòng (tên file có thể chứa khoảng trắng, có hoặc không có tiền tố/đuôi) */
 function splitCodes(cell){
-  return (cell || '').split(/[\s,;]+/).map(s => s.trim()).filter(s => /^BUYWEAPON_INFO_/i.test(s));
+  return (cell || '').split(/[,;\n|]+/).map(s => s.trim()).filter(Boolean);
 }
 const norm = s => (s || '').toLowerCase();
 const esc  = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const imgSrc = code => CONFIG.IMAGE_DIR + code + CONFIG.IMAGE_EXT;
+const attr = s => String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
 
+/* ===== Tìm ảnh (cùng cách với trang Weapon) ===== */
+let MAN = {};   // manifest.json: { "đường/dẫn/viết/thường": "Đường/Dẫn/Thật" }
+async function loadManifest(){
+  if (location.protocol === 'file:') return;   // mở từ máy (Windows không phân biệt hoa/thường) nên không cần manifest
+  try{ const r = await fetch(CONFIG.WEAPON_BASE + 'manifest.json?_=' + Date.now()); if (r.ok) MAN = await r.json(); }catch(e){}
+}
+const fixPath = p => { try{ return MAN[decodeURIComponent(p).toLowerCase()] || p; }catch(e){ return p; } };
+
+function imgList(code, hints){
+  if (!code) return [];
+  const n = code.split(/[\\/]/).pop().trim();
+  const m = n.match(/\.(png|jpg|jpeg|webp)$/i);
+  const ext = m ? m[0] : '';
+  let base = ext ? n.slice(0, -ext.length) : n;
+  if (!base.toUpperCase().startsWith(CONFIG.IMG_PREFIX)) base = CONFIG.IMG_PREFIX + '_' + base;
+  const exts = [...new Set(ext ? [ext, '.PNG', '.png'] : ['.PNG', '.png', '.jpg'])];
+  const clean = x => x.replace(/[\/]+$/, '');
+  const first = (hints || []).map(x => (x || '').trim()).filter(Boolean).map(x => CONFIG.IMG_DIR + clean(x) + '/');
+  const sub = CONFIG.IMG_SUBDIRS.map(d => CONFIG.IMG_DIR + d + '/');
+  const dirs = [...new Set([...first, CONFIG.IMG_DIR, ...sub])];
+  const list = dirs.flatMap(d => exts.map(e => fixPath(d + base + e)));
+  return [...new Set(list)].map(p => CONFIG.WEAPON_BASE + p);
+}
+window.__fb = img => {
+  const list = JSON.parse(img.dataset.alts || '[]');
+  const next = list.shift();
+  if (next){ img.dataset.alts = JSON.stringify(list); img.src = next; }
+  else img.replaceWith(Object.assign(document.createElement('span'), {className:'noimg', textContent:'no image'}));
+};
+
+/* Vũ khí thuộc set khi tên vũ khí (cột A của tab vũ khí) chứa nguyên tên set (cột A của tab WEAPON SETS) */
 function matches(set, w){
-  const name = norm(w.name), codes = w.codes.map(norm).join(' ');
-  if (set.exclude.some(x => name.includes(x))) return false;
   const re = new RegExp('(^|[^a-z0-9])' + esc(norm(set.name)) + '([^a-z0-9]|$)');
-  if (re.test(name)) return true;
-  return set.extra.some(x => name.includes(x) || codes.includes(x));
+  return re.test(norm(w.name));
 }
 
 function membersOf(set){
@@ -141,21 +190,24 @@ function membersOf(set){
     for (const c of codes){
       const key = c || ('name:' + w.name);
       if (seen.has(key)) continue;
-      seen.add(key); out.push({name: w.name, code: c, badges: w.badges});
+      seen.add(key); out.push({name: w.name, code: c, hints: w.hints, badges: w.badges});
     }
   }
   return out;
 }
 
-function imgTag(code){
-  if (!code) return '<span class="noimg">no image</span>';
-  return `<img loading="lazy" src="${imgSrc(code)}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'noimg',textContent:'no image'}))">`;
+function imgTag(code, hints){
+  const list = imgList(code, hints);
+  if (!list.length) return '<span class="noimg">no image</span>';
+  const [first, ...rest] = list;
+  return `<img loading="lazy" src="${attr(first)}" alt="" data-alts="${attr(JSON.stringify(rest))}" onerror="__fb(this)">`;
 }
 
 function renderTabs(){
   const groups = [...new Set(SETS.map(s => s.group))];
   if (!groups.includes(currentGroup)) currentGroup = groups[0];
-  $('tabs').innerHTML = groups.map(g => `<button class="${g===currentGroup?'on':''}" data-g="${g}">${g}</button>`).join('');
+  // Chỉ có 1 nhóm (vd "Other") thì ẩn hàng nút nhóm; có từ 2 nhóm trở lên mới hiện
+  $('tabs').innerHTML = groups.length < 2 ? '' : groups.map(g => `<button class="${g===currentGroup?'on':''}" data-g="${g}">${g}</button>`).join('');
   $('tabs').querySelectorAll('button').forEach(b => b.onclick = () => { currentGroup = b.dataset.g; renderTabs(); renderList(); });
 }
 
@@ -165,8 +217,8 @@ function renderList(){
   $('list').innerHTML = sets.map(s => {
     const m = s.members;
     return `<button class="card" data-i="${SETS.indexOf(s)}">
-      <div class="thumb">${imgTag(m.length ? m[0].code : null)}${badgesTag(s.badges)}</div>
-      <div class="name">${s.name}<span class="count">${m.length} item</span></div></button>`;
+      <div class="thumb">${imgTag(m.length ? m[0].code : null, m.length ? m[0].hints : null)}${badgesTag(s.badges)}</div>
+      <div class="name">${s.name}</div></button>`;
   }).join('') || '<div class="noimg" style="padding:20px">Không có set nào.</div>';
   $('list').querySelectorAll('.card').forEach(c => c.onclick = () => openSet(SETS[+c.dataset.i]));
 }
@@ -174,7 +226,7 @@ function renderList(){
 function openSet(set){
   $('poptitle').textContent = set.name;
   $('popbody').innerHTML = set.members.map(m =>
-    `<div class="card item"><div class="thumb">${imgTag(m.code)}${badgesTag(m.badges)}</div><div class="name">${m.name}</div></div>`).join('')
+    `<div class="card item"><div class="thumb">${imgTag(m.code, m.hints)}${badgesTag(m.badges)}</div><div class="name">${m.name}</div></div>`).join('')
     || '<div class="noimg" style="padding:20px">Chưa có vũ khí nào khớp với set này.</div>';
   $('overlay').classList.add('open');
 }
@@ -188,17 +240,22 @@ $('reset').onclick = () => { $('search').value=''; renderList(); };
 
 async function init(){
   try{
-    const [setTab, ...tabs] = await Promise.all([CONFIG.SETS_TAB, ...CONFIG.WEAPON_TABS].map(loadTab));
+    const [res] = await Promise.all([
+      Promise.allSettled([CONFIG.SETS_TAB, ...CONFIG.WEAPON_TABS].map(loadTab)),
+      loadManifest()
+    ]);
+    if (res[0].status !== 'fulfilled') throw res[0].reason;   // tab WEAPON SETS bắt buộc phải tải được
+    const setTab = res[0].value;
+    const tabs = res.slice(1).filter(x => x.status === 'fulfilled').map(x => x.value);   // tab vũ khí nào lỗi thì bỏ qua
     WEAPONS = tabs.flatMap(t => t.rows.map(r => ({
       name: (r[0] || '').trim(),
       codes: splitCodes(r[1]),
+      hints: [r[2], r[3]],   // cột C (TYPE), D (CATEGORIZED): gợi ý thư mục ảnh, như trang Weapon
       badges: t.badgeCol >= 0 ? splitBadges(r[t.badgeCol]) : []
     }))).filter(w => w.name);
     SETS = setTab.rows.filter(r => (r[0] || '').trim()).map(r => ({
       name: r[0].trim(),
       group: (r[1] || '').trim() || 'Other',
-      extra: (r[2] || '').split(';').map(s => norm(s.trim())).filter(Boolean),
-      exclude: (r[3] || '').split(';').map(s => norm(s.trim())).filter(Boolean),
       badges: setTab.badgeCol >= 0 ? splitBadges(r[setTab.badgeCol]) : []
     }));
     SETS.forEach(s => s.members = membersOf(s));
