@@ -35,14 +35,20 @@
   .count{font-weight:500;font-size:11px;opacity:.75;margin-top:2px}
   .badges{position:absolute;left:8px;bottom:6px;display:flex;gap:4px}
   .badges img{height:16px;width:auto;max-width:none;max-height:none}
+  .badges.tr{left:auto;bottom:auto;right:6px;top:6px}   /* badge góc trên bên phải của thẻ set (cột C) */
+  .badges.tr img{height:24px}
   #overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:100;padding:20px}
   #overlay.open{display:flex}
-  #popup{background:var(--card);border-radius:8px;box-shadow:var(--shadow);width:min(1100px,100%);max-height:88vh;display:flex;flex-direction:column}
+  #popup{background:var(--card);border-radius:8px;box-shadow:var(--shadow);width:min(1500px,100%);max-height:88vh;display:flex;flex-direction:column}
   .pophead{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--line)}
   #popup h2{margin:0;font-size:18px;font-weight:700;color:var(--head)}
   #close{background:none;border:0;color:var(--muted);font-size:26px;cursor:pointer;line-height:1}
   #close:hover{color:var(--tx)}
   #popbody{overflow:auto;padding:18px 20px 22px}
+  /* tối đa 6 thẻ mỗi hàng (màn hình hẹp thì tự giảm số cột), chữ trong thẻ nhỏ hơn 1px */
+  #popbody.grid{grid-template-columns:repeat(auto-fill,minmax(max(150px,calc((100% - 5*14px)/6)),1fr))}
+  #popbody .name{font-size:11px}
+  #popbody .noimg{font-size:10px}
   .item{cursor:default}
   .item:hover{transform:none;box-shadow:none}
 </style>
@@ -70,7 +76,13 @@
 const CONFIG = {
   SHEET_ID: '1GVgZrCybnuEdGPtVE33NMCmwRWSqfgLHIuz2XAXxhoc',   // phần giữa /d/ và /edit trong link sheet
   WEAPON_TABS: ['RIFLE','SNIPER','SMG','MG','SHOTGUN','PISTOL','MELEE','THROW'],
-  SETS_TAB: 'WEAPON SETS',   // A: SET NAME | B: GROUP | C: EXTRA KEYWORDS (cách nhau , hoặc ;) — đối chiếu với cột A (WEAPON NAME) của các tab vũ khí. Cột D không còn dùng.
+  // Tab WEAPON SETS:
+  //   A: SET NAME  = tên set. Nếu cột B để trống thì vũ khí nào có tên (cột A các tab vũ khí) chứa tên set này sẽ thuộc set.
+  //   B: WEAPON IMAGE CODES = mã ảnh các vũ khí của set, điền tay, cách nhau bằng , hoặc ; hoặc xuống dòng
+  //      vd: BUYWEAPON_INFO_EVO3A1_Abyssal, BUYWEAPON_INFO_Grenade_Abyssal, BUYWEAPON_INFO_Card_Abyssal_1
+  //      Có điền cột B thì set CHỈ gồm các mã này (chính xác, không bị trùng sang set khác).
+  //   C: BADGE = từ khoá badge hiện ở góc TRÊN BÊN PHẢI thẻ set (vd VVIP). Để trống nếu không có.
+  SETS_TAB: 'WEAPON SETS',
   // Ảnh vũ khí: dùng chung thư mục ảnh của trang /weapon/ (không cần cột ảnh riêng ở tab WEAPON SETS).
   // Cách tìm giống hệt trang Weapon: thêm tiền tố BUYWEAPON_INFO_ nếu thiếu, thử thư mục theo cột C/D của dòng vũ khí,
   // thư mục gốc img/, rồi các thư mục con bên dưới; thử cả đuôi .PNG/.png; khớp hoa/thường nhờ /weapon/manifest.json.
@@ -78,10 +90,8 @@ const CONFIG = {
   IMG_DIR: 'img/',
   IMG_SUBDIRS: ['RIFLE','SNIPER','SMG','SHOTGUN','MG','PISTOL','MELEE','GRENADE','FLASHBANG','SMOKE'],
   IMG_PREFIX: 'BUYWEAPON_INFO',
-  BADGE_DIR: 'images/badges/', // thư mục chứa ảnh badge
-  BADGE_EXT: '.png'          // đuôi ảnh badge
-  // Badge: thêm 1 cột có tiêu đề "BADGES" (ở tab vũ khí và/hoặc tab WEAPON SETS),
-  // ghi tên file badge không có đuôi, cách nhau bằng dấu , hoặc ; — ví dụ: VVIP; Hot
+  BADGE_DIR: 'img/badges/'   // thư mục badge (nằm trong thư mục weapon), file tag_<tên>.PNG như trang Weapon
+  // Badge: từ khoá = tên file badge bỏ "tag_" và đuôi, vd tag_VVIP.PNG -> VVIP. Nhiều badge cách nhau bằng dấu , hoặc ;
 };
 /* ========================================= */
 
@@ -132,10 +142,19 @@ function loadTab(name){
 function splitBadges(cell){
   return (cell || '').split(/[,;\n]+/).map(s => s.trim()).filter(Boolean);
 }
-function badgesTag(list){
+/* Badge giống trang Weapon: img/badges/tag_<tên>.PNG (thử .PNG/.png, tên gốc/chữ thường) */
+function badgeList(v){
+  const n = v.split(/[\\/]/).pop().replace(/\.(png|jpg|jpeg|webp)$/i, '').trim().replace(/^tag_/i, '');
+  const p = [];
+  for (const e of ['.PNG', '.png']) for (const b of ['tag_' + n, 'tag_' + n.toLowerCase()]) p.push(CONFIG.WEAPON_BASE + fixPath(CONFIG.BADGE_DIR + b + e));
+  return [...new Set(p)];
+}
+function badgesTag(list, cls){
   if (!list || !list.length) return '';
-  return '<div class="badges">' + list.map(b =>
-    `<img src="${CONFIG.BADGE_DIR}${b}${CONFIG.BADGE_EXT}" alt="${b}" title="${b}" onerror="this.remove()">`).join('') + '</div>';
+  return `<div class="badges${cls ? ' ' + cls : ''}">` + list.map(b => {
+    const [first, ...rest] = badgeList(b);
+    return `<img class="bd" src="${attr(first)}" alt="${attr(b)}" title="${attr(b)}" data-alts="${attr(JSON.stringify(rest))}" onerror="__fb(this)">`;
+  }).join('') + '</div>';
 }
 
 /* Cột B của tab vũ khí: giống trang Weapon — tách bằng , ; | hoặc xuống dòng (tên file có thể chứa khoảng trắng, có hoặc không có tiền tố/đuôi) */
@@ -173,18 +192,43 @@ window.__fb = img => {
   const list = JSON.parse(img.dataset.alts || '[]');
   const next = list.shift();
   if (next){ img.dataset.alts = JSON.stringify(list); img.src = next; }
+  else if (img.classList.contains('bd')) img.remove();   // badge không tìm thấy thì ẩn
   else img.replaceWith(Object.assign(document.createElement('span'), {className:'noimg', textContent:'no image'}));
 };
 
 /* Vũ khí thuộc set khi tên vũ khí (cột A của các tab vũ khí) chứa tên set (cột A của tab WEAPON SETS)
-   HOẶC chứa một trong các từ khoá ở cột C (EXTRA KEYWORDS, cách nhau bằng dấu , hoặc ; hoặc xuống dòng) */
+   (chỉ dùng khi cột B của set để trống) */
 const wordRe = t => new RegExp('(^|[^a-z0-9])' + esc(norm(t)) + '([^a-z0-9]|$)');
 function matches(set, w){
-  const name = norm(w.name);
-  return set.terms.some(t => wordRe(t).test(name));
+  return wordRe(set.name.trim()).test(norm(w.name).trim());
+}
+
+/* Chuẩn hoá mã ảnh để so sánh: bỏ thư mục, đuôi .png/.jpg, tiền tố BUYWEAPON_INFO_, không phân biệt hoa/thường */
+const normCode = s => norm(String(s || '').split(/[\\/]/).pop()).replace(/\.(png|jpg|jpeg|webp)$/i, '').replace(/^buyweapon_info_/, '').trim();
+const prettyName = s => String(s || '').split(/[\\/]/).pop().replace(/\.(png|jpg|jpeg|webp)$/i, '').replace(/^buyweapon_info_/i, '').replace(/[_]+/g, ' ').trim();
+let CODEIDX = new Map();   // mã ảnh chuẩn hoá -> {w: vũ khí, code: mã gốc trong Sheet}
+function buildCodeIndex(){
+  CODEIDX = new Map();
+  for (const w of WEAPONS) for (const c of w.codes){
+    const k = normCode(c);
+    if (k && !CODEIDX.has(k)) CODEIDX.set(k, {w, code: c});
+  }
 }
 
 function membersOf(set){
+  if (set.codes.length){                       // cột B có điền: set gồm đúng các mã này, theo thứ tự đã điền
+    const seen = new Set(), out = [];
+    for (const c of set.codes){
+      const k = normCode(c);
+      if (!k || seen.has(k)) continue;
+      seen.add(k);
+      const hit = CODEIDX.get(k);
+      out.push(hit
+        ? {name: hit.w.name, code: hit.code, hints: hit.w.hints, badges: hit.w.badges}   // có trong tab vũ khí: lấy tên, badge, thư mục ảnh
+        : {name: prettyName(c), code: c, hints: [], badges: []});                       // không có: vẫn hiện ảnh, tên suy từ mã
+    }
+    return out;
+  }
   const seen = new Set(), out = [];
   for (const w of WEAPONS){
     if (!matches(set, w)) continue;
@@ -219,7 +263,7 @@ function renderList(){
   $('list').innerHTML = sets.map(s => {
     const m = s.members;
     return `<button class="card" data-i="${SETS.indexOf(s)}">
-      <div class="thumb">${imgTag(m.length ? m[0].code : null, m.length ? m[0].hints : null)}${badgesTag(s.badges)}</div>
+      <div class="thumb">${imgTag(m.length ? m[0].code : null, m.length ? m[0].hints : null)}${badgesTag(s.badges)}${badgesTag(s.corner, 'tr')}</div>
       <div class="name">${s.name}</div></button>`;
   }).join('') || '<div class="noimg" style="padding:20px">Không có set nào.</div>';
   $('list').querySelectorAll('.card').forEach(c => c.onclick = () => openSet(SETS[+c.dataset.i]));
@@ -257,11 +301,12 @@ async function init(){
     }))).filter(w => w.name);
     SETS = setTab.rows.filter(r => (r[0] || '').trim()).map(r => ({
       name: r[0].trim(),
-      group: (r[1] || '').trim() || 'Other',
-      // từ khoá nhận diện = tên set (cột A) + EXTRA KEYWORDS (cột C)
-      terms: [...new Set([r[0].trim(), ...(r[2] || '').split(/[,;\n]+/).map(s => s.trim()).filter(Boolean)])],
-      badges: setTab.badgeCol >= 0 ? splitBadges(r[setTab.badgeCol]) : []
+      group: 'Other',                    // cột B giờ là mã ảnh nên không còn dùng làm nhóm
+      codes: splitCodes(r[1]),           // cột B: mã ảnh các vũ khí của set (điền tay)
+      corner: splitBadges(r[2]),         // cột C: badge góc trên bên phải thẻ set
+      badges: setTab.badgeCol >= 0 && setTab.badgeCol !== 2 ? splitBadges(r[setTab.badgeCol]) : []   // cột có tiêu đề BADGES khác cột C (nếu có): hiện góc dưới trái
     }));
+    buildCodeIndex();
     SETS.forEach(s => s.members = membersOf(s));
     $('status').style.display = 'none';
     renderTabs(); renderList();
