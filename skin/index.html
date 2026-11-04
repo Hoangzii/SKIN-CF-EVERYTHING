@@ -91,7 +91,7 @@ label.chk{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
 #pop{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;padding:16px}
 #pop.on{display:flex}
 #pop,#pop *{font-family:'Lexend',system-ui,sans-serif;font-weight:700}   /* toàn bộ chữ trong popup: Lexend Bold */
-#pop .pbox{position:relative;width:min(780px,100%);max-height:92vh;overflow:auto;background:var(--card);color:var(--tx);border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+#pop .pbox{position:relative;width:max-content;min-width:min(780px,100%);max-width:100%;max-height:92vh;overflow:auto;background:var(--card);color:var(--tx);border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.4)}
 #pop .phd{background:var(--label);color:var(--label-tx);padding:16px 52px 16px 22px;font-size:18px;font-weight:700;line-height:1.3}
 #pop .px{position:absolute;top:12px;right:16px;font:700 22px/1 'Lexend',sans-serif;cursor:pointer;user-select:none;color:var(--label-tx)}
 #pop .pbd{display:flex;flex-wrap:wrap;gap:24px;padding:20px 22px;align-items:center}
@@ -104,11 +104,11 @@ label.chk{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
 #pop .tgl button{flex:0 1 auto;height:auto;font-size:12px;padding:5px 12px}
 #pop .preg{flex:1 1 260px;font-size:14px;line-height:1.9}
 #pop .preg table{border-collapse:collapse}
-#pop .preg td{vertical-align:top;padding:0}
+#pop .preg td{vertical-align:top;padding:0;white-space:nowrap}
 #pop .preg td:first-child{text-align:right;font-weight:700;white-space:nowrap}
 #pop .preg td.sep{padding:0 12px;color:var(--sub)}
 #pop .preg tr.rm td{color:var(--sub);text-decoration:line-through}
-#pop .pyl{background:#000;color:#fbdf89;padding:12px 22px;font-size:14px;font-weight:700;line-height:1.7;text-align:left;word-break:break-all}
+#pop .pyl{width:0;min-width:100%;box-sizing:border-box;background:#000;color:#fbdf89;padding:12px 22px;font-size:14px;font-weight:700;line-height:1.7;text-align:left;word-break:break-all}
 .item{cursor:pointer}
 
 #msg{text-align:center;color:var(--sub);padding:30px;font-size:14px}
@@ -148,6 +148,9 @@ const CFG = {
   // Cách 2 (dự phòng nếu chưa có tab TABS): liệt kê ở SHEETS = TÊN TAB trong Google Sheets (trùng với tên thư mục hình trong img/).
   //   Tab nào không tồn tại sẽ tự bị bỏ qua. Ghi gid ('1589705234') thì web nhận diện thư mục hình theo cột TYPE (C) của từng dòng (SNIPER → img/SNIPER/, RIFLE → img/RIFLE/).
   // Mỗi tab được nhận diện riêng: hình vũ khí của tab RIFLE nằm trong img/RIFLE/, tab SNIPER nằm trong img/SNIPER/ ...
+  // Khoá Google Sheets API (miễn phí). Có khoá => web đọc TOÀN BỘ dòng bằng Sheets API, nên bộ lọc "Create a filter" trong Sheet KHÔNG làm mất dòng trên web.
+  // Để trống '' => đọc qua gviz như cũ: dòng đang bị bộ lọc ẩn sẽ không hiện (dùng "Filter views" thì không ảnh hưởng).
+  API_KEY: '',
   TAB_LIST: 'TABS',
   SHEETS  : ['1589705234','1544922343','1082784692','1517610361','1070123505','1766054418','1458697047'],   // gid của các tab (dãy số sau gid= trên thanh địa chỉ). Thêm tab mới: thêm gid vào đây, cách nhau bằng dấu phẩy
 
@@ -240,6 +243,28 @@ function parseTable(t){
   let rows=t.rows.map(r=>{const a=[];for(let i=0;i<t.cols.length;i++)a.push(cellStr(r.c&&r.c[i]));return a});
   if(headers.every(h=>!h)&&rows.length){headers=rows.shift()}
   return {headers,rows};
+}
+
+/* ===== Đọc bằng Sheets API: trả về mọi dòng, kể cả dòng đang bị bộ lọc ẩn (gviz thì bỏ các dòng đó) ===== */
+const fvc=c=>c&&c.formattedValue!=null?String(c.formattedValue).trim():'';
+async function apiGrids(refs){
+  const base='https://sheets.googleapis.com/v4/spreadsheets/'+CFG.SHEET_ID,key='key='+encodeURIComponent(CFG.API_KEY);
+  const j=async u=>{const r=await fetch(u),d=await r.json();if(d.error)throw new Error(d.error.message);return d};
+  const meta=await j(base+'?fields=sheets.properties(sheetId,title)&'+key);
+  const props=meta.sheets.map(s=>s.properties);
+  const titles=refs.map(ref=>{ref=String(ref).trim();const p=ref===''?props[0]:/^\d+$/.test(ref)?props.find(x=>String(x.sheetId)===ref):props.find(x=>x.title.toLowerCase()===ref.toLowerCase());return p?p.title:null});
+  const want=[...new Set(titles.filter(Boolean))];
+  if(!want.length)return refs.map(()=>null);
+  const ranges=want.map(t=>'ranges='+encodeURIComponent("'"+t.replace(/'/g,"''")+"'")).join('&');
+  const d=await j(base+'?includeGridData=true&'+ranges+'&fields='+encodeURIComponent('sheets(properties(title),data(rowData(values(formattedValue))))')+'&'+key);
+  const byTitle={};
+  d.sheets.forEach(s=>{byTitle[s.properties.title]=(s.data&&s.data[0]&&s.data[0].rowData)||[]});
+  return titles.map(t=>t?byTitle[t]||null:null);
+}
+function apiTable(rd){
+  let w=0;rd.forEach(rw=>(rw&&rw.values||[]).forEach((c,i)=>{if(fvc(c)&&i+1>w)w=i+1}));
+  const get=rw=>{const v=(rw&&rw.values)||[],a=[];for(let i=0;i<w;i++)a.push(fvc(v[i]));return a};
+  return {headers:get(rd[0]),rows:rd.slice(1).map(get).filter(r=>r.some(x=>x))};
 }
 
 /* ===== Xếp lại cột của từng tab theo TÊN TIÊU ĐỀ về bố cục chuẩn (CFG.COL) ===== */
@@ -676,19 +701,32 @@ $('btnReset').onclick=resetAll;
     let refs=[];
     if(CFG.TAB_LIST){                                   // đọc danh sách tab từ tab "TABS" (nếu có)
       try{
-        const t=await loadSheet(CFG.TAB_LIST,0);
-        const h0=cellStr(t.rows[0]&&t.rows[0].c&&t.rows[0].c[0]);
-        if(/^weapon name$/i.test(h0)||t.cols.some(c=>/^weapon name$/i.test(c.label||'')))throw 0;   // không có tab TABS: Google trả về tab dữ liệu => bỏ qua
-        const names=t.rows.map(r=>cellStr(r.c&&r.c[0])).filter(x=>x&&!x.startsWith('#')&&x.toLowerCase()!==CFG.TAB_LIST.toLowerCase());
+        let names=null;
+        if(CFG.API_KEY){try{const g=await apiGrids([CFG.TAB_LIST]);if(g[0]&&g[0].length)names=g[0].map(rw=>fvc(rw&&rw.values&&rw.values[0]))}catch(e){}}   // đọc bằng API: không bị bộ lọc
+        if(!names){
+          const t=await loadSheet(CFG.TAB_LIST,0);
+          const h0=cellStr(t.rows[0]&&t.rows[0].c&&t.rows[0].c[0]);
+          if(/^weapon name$/i.test(h0)||t.cols.some(c=>/^weapon name$/i.test(c.label||'')))throw 0;   // không có tab TABS: Google trả về tab dữ liệu => bỏ qua
+          names=t.rows.map(r=>cellStr(r.c&&r.c[0]));
+        }
+        names=names.filter(x=>x&&!x.startsWith('#')&&x.toLowerCase()!==CFG.TAB_LIST.toLowerCase());
         if(names.length&&names.length<=40)refs=uniq(names);
       }catch(e){}
     }
     if(!refs.length)refs=(CFG.SHEETS&&CFG.SHEETS.length?CFG.SHEETS:['']).map(String);
-    const res=await Promise.allSettled(refs.map(r=>loadSheet(r)));
+    let res=null,apiNote='';
+    if(CFG.API_KEY){                                    // có khoá API: đọc thẳng bằng Sheets API (không bị bộ lọc ảnh hưởng)
+      try{
+        const g=await apiGrids(refs);
+        res=g.map(rd=>rd&&rd.length?{status:'fulfilled',value:apiTable(rd),api:true}:{status:'rejected'});
+        if(!res.some(x=>x.status==='fulfilled'))throw new Error('không tìm thấy tab');
+      }catch(e){res=null;apiNote=' · Không đọc được bằng Sheets API ('+e.message+'), đang dùng cách đọc thường - dòng bị bộ lọc ẩn trong Sheet có thể không hiện'}
+    }
+    if(!res)res=await Promise.allSettled(refs.map(r=>loadSheet(r)));
     const ok=[],sig=new Set(),missing=[];
     res.forEach((x,i)=>{
       if(x.status!=='fulfilled')return;
-      const t=canon(parseTable(x.value));
+      const t=canon(x.api?x.value:parseTable(x.value));
       // Khi tên tab không tồn tại, Google trả về tab đầu tiên => nhận ra bằng nội dung trùng với tab đã đọc và bỏ qua
       const sg=t.rows.slice(0,8).map(r=>r.join('\u0001')).join('\u0002');
       if(t.rows.length&&sig.has(sg)){missing.push(refs[i]||'(đầu tiên)');return}
@@ -700,7 +738,7 @@ $('btnReset').onclick=resetAll;
     const seen=new Set();
     const items=ok.flatMap(x=>x.rows.map(r=>({r,tab:x.tab}))).filter(({r,tab})=>{const k=tab+'\u0001'+r.join('\u0001');if(seen.has(k))return false;seen.add(k);return true});
     build(ok[0].headers,items);
-    $('ver').textContent=(bad.length?'Không thấy tab: '+bad.join(', '):'');   // bình thường để trống; chỉ hiện khi có cảnh báo
+    $('ver').textContent=(bad.length?'Không thấy tab: '+bad.join(', '):'')+apiNote;   // bình thường để trống; chỉ hiện khi có cảnh báo
   }catch(err){
     $('ver').textContent='';$('msg').textContent=err.message;$('msg').className='err';return;
   }

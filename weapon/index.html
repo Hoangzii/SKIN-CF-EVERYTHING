@@ -68,6 +68,29 @@ label.chk{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
 .cbl div.none{color:var(--sub);cursor:default}
 #tip td{vertical-align:top;padding:0 0 0 0}
 #tip td:first-child{text-align:right;font-weight:700;padding-right:14px;white-space:nowrap}
+/* ---- Popup chi tiết khi bấm vào vũ khí ---- */
+#pop{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;padding:16px}
+#pop.on{display:flex}
+#pop,#pop *{font-family:'Lexend',system-ui,sans-serif;font-weight:700}
+#pop .pbox{position:relative;width:max-content;min-width:min(780px,100%);max-width:100%;max-height:92vh;overflow:auto;background:var(--card);color:var(--tx);border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+#pop .phd{background:var(--label);color:var(--label-tx);padding:16px 52px 16px 22px;font-size:18px;line-height:1.3}
+#pop .px{position:absolute;top:12px;right:16px;font-size:22px;line-height:1;cursor:pointer;user-select:none;color:var(--label-tx)}
+#pop .pbd{display:flex;flex-wrap:wrap;gap:24px;padding:20px 22px;align-items:center}
+#pop .pleft{flex:1 1 300px;min-width:0}
+#pop .ppic{height:200px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:6px}
+#pop .ppic img.w{max-width:92%;max-height:170px;object-fit:contain}
+#pop .ppic .noimg{font-size:12px;color:var(--sub)}
+#pop .tgl{display:flex;flex-wrap:wrap;justify-content:center;padding:10px 0 0}
+#pop .tgl button{flex:0 1 auto;height:auto;font-size:12px;padding:5px 12px}
+#pop .preg{flex:1 1 260px;font-size:14px;line-height:1.9}
+#pop .preg table{border-collapse:collapse}
+#pop .preg td{vertical-align:top;padding:0;white-space:nowrap}
+#pop .preg td:first-child{text-align:right;white-space:nowrap}
+#pop .preg td.sep{padding:0 12px;color:var(--sub)}
+#pop .preg tr.rm td{color:var(--sub);text-decoration:line-through}
+#pop .preg s{text-decoration:line-through}
+#pop .pyl{width:0;min-width:100%;box-sizing:border-box;background:#000;color:#fbdf89;padding:12px 22px;font-size:14px;line-height:1.7;text-align:left;word-break:break-all}
+.item{cursor:pointer}
 #msg{text-align:center;color:var(--sub);padding:30px;font-size:14px}
 #msg.err{color:#d4380d}
 #msg:empty,.ver:empty{display:none}   /* ẩn khoảng trống khi không có thông báo */
@@ -88,6 +111,7 @@ label.chk{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
 <div class="grid" id="grid"></div>
 <div class="pager" id="pager"></div>
 <div id="tip"></div>
+<div id="pop"><div class="pbox"><div class="phd" id="ptitle"></div><span class="px" id="pclose">&times;</span><div class="pbd"><div class="pleft"><div class="ppic" id="ppic"></div><div class="tgl" id="ptgl"></div></div><div class="preg" id="preg"></div></div><div class="pyl" id="pyl"></div></div></div>
 <div class="cbl" id="cbl"></div>
 
 <!-- data.js: giữ nguyên, không chỉnh sửa. Nếu file có khai báo SHEET_ID / SHEET_GID thì sẽ được dùng; nếu có mảng dữ liệu thì dùng làm dự phòng khi không tải được Sheet. -->
@@ -148,6 +172,8 @@ const CFG = {
   CLOSED_REGIONS: ['Russia','Indonesia','Korea','South Korea','Español','Europe','SEA','Japan','Taiwan'],   // khu vực đã ngừng hoạt động: mọi dữ liệu của cột này bị gạch ngang + xám. Hoặc ghi "Russia (Removed)" ngay tiêu đề cột trong Sheet.
   CLOSED_FROM: 14,   // chỉ tiêu đề cột O (=14) trở đi (O–V) mà bị gạch ngang trong Sheet mới tính là khu vực đóng "(Closed)"
   REMOVED_WORDS: ['Removed','Closed'],   // từ đánh dấu ngừng hoạt động trong ô khu vực (thêm từ khác nếu cần, vd 'Đã gỡ')
+  POPUP_REGIONS: ['China','Vietnam','Brazil','West','Philippines'],   // 5 dòng khu vực trong popup (đúng tên cột khu vực trong Sheet)
+  HOVER_TIP: false,   // true = bật lại tooltip khu vực khi rê chuột vào thẻ
   PER_PAGE: 24,
   // Menu CLASS (cột F → G) và SPECIAL (cột H). Sửa tại đây nếu cần.
   CLASS_LABEL: 'CLASS',
@@ -163,7 +189,8 @@ const CFG = {
   SPECIAL_LABEL: 'SPECIAL',
   SPECIAL_BADGES: { BOLT:['PVE','NANO'] },  // mục BOLT chỉ hiện vũ khí có ĐỦ các thẻ này ở cột I (xoá dòng này nếu không cần)
   SPECIAL_KEYS: ['PVE','NANO','BOLT'],     // lọc ô cột H có chứa từ khoá
-  // Khoá Google Sheets API (miễn phí) - CHỈ cần nếu muốn web nhận định dạng GẠCH NGANG thật của ô trong Sheet (cột J–V).
+  // Khoá Google Sheets API (miễn phí) - cần nếu muốn (1) web nhận định dạng GẠCH NGANG thật của ô (cột J–V) và (2) bộ lọc "Create a filter" trong Sheet KHÔNG làm mất dòng trên web.
+  // Có khoá thì web đọc toàn bộ dữ liệu bằng Sheets API (bỏ qua bộ lọc). Không có khoá thì đọc qua gviz: dòng bị bộ lọc ẩn sẽ không hiện (dùng "Filter views" thì không sao).
   // Để trống '' thì web chỉ nhận chữ gạch ngang kiểu Unicode (R̶u̶s̶s̶i̶a̶) và chữ "Removed". Xem hướng dẫn tạo khoá trong tin nhắn.
   API_KEY: ''
 };
@@ -221,6 +248,13 @@ async function loadStrikes(refs){
   const byTitle={};
   d.sheets.forEach(s=>{byTitle[s.properties.title]=(s.data&&s.data[0]&&s.data[0].rowData)||[]});
   return titles.map(t=>t?byTitle[t]||null:null);
+}
+/* Sheets API trả về TOÀN BỘ dòng (kể cả dòng đang bị bộ lọc "Create a filter" ẩn), còn gviz thì bỏ các dòng bị lọc ẩn.
+   Nên khi có API_KEY, dữ liệu được đọc thẳng từ API => bật/tắt bộ lọc trong Sheet không làm mất dòng trên web. */
+function apiTable(api){
+  const L=CFG.COL.regionTo+1,fv=c=>c&&c.formattedValue!=null?String(c.formattedValue).trim():'';
+  const get=rw=>{const v=(rw&&rw.values)||[],a=[];for(let i=0;i<L;i++)a.push(fv(v[i]));return a};
+  return {headers:get(api[0]),rows:api.slice(1).map(get).filter(r=>r.some(x=>x))};
 }
 function applyStrikes(rows,api){
   if(!api)return null;
@@ -467,7 +501,13 @@ function buildEntries(list){
   return out;
 }
 $('grid').addEventListener('click',e=>{
-  const b=e.target.closest('.tgl button');if(!b)return;
+  if(e.target.closest('.tgl')&&!e.target.closest('.tgl button'))return;
+  const b=e.target.closest('.tgl button');
+  if(!b){                                              // bấm vào thẻ => mở popup
+    const card=e.target.closest('.item');if(!card)return;
+    const on=card.querySelector('.tgl button.on');
+    openPop(card,on?+on.dataset.j:0);return;
+  }
   const it=b.closest('.item');
   if(it._g){                                           // khung gộp nhiều dòng
     const m=it._g.members[+b.dataset.j];if(!m)return;
@@ -769,6 +809,8 @@ function render(){
 /* ================= TOOLTIP THEO KHU VỰC ================= */
 const tip=$('tip');
 $('grid').addEventListener('mousemove',e=>{
+  tip.style.display='none';
+  if(!CFG.HOVER_TIP)return;   // tooltip khu vực đã tắt (HOVER_TIP:true để bật lại)
   const it=e.target.closest('.item');
   if(!it){tip.style.display='none';return}
   const r=ROWS[+it.dataset.i];
@@ -785,6 +827,43 @@ $('grid').addEventListener('mousemove',e=>{
   tip.style.left=Math.max(4,x)+'px';tip.style.top=Math.max(4,y)+'px';
 });
 $('grid').addEventListener('mouseleave',()=>tip.style.display='none');
+
+/* ================= POPUP CHI TIẾT VŨ KHÍ (bấm vào thẻ) ================= */
+let POP=null;
+function popRender(k){
+  const v=POP.vars[k],r=v.row;
+  $('ptitle').textContent=r.name;
+  $('ppic').innerHTML=imgTag(weaponSrcList(v.img,r),'w',r.name)||'<div class="noimg">(no image)</div>';   // chỉ hình cột IMAGE
+  $('ptgl').querySelectorAll('button').forEach(b=>b.classList.toggle('on',+b.dataset.j===k));
+  $('preg').innerHTML='<table>'+CFG.POPUP_REGIONS.map(n=>{
+    const i=REGIONS.findIndex(g=>g.name.trim().toLowerCase()===n.toLowerCase());
+    const has=i>=0&&r.reg[i];
+    return `<tr${has&&r.rm[i]?' class="rm"':''}><td>${esc(n)}</td><td class="sep">|</td><td>${has?regHTML(r,i):'–'}</td></tr>`;
+  }).join('')+'</table>';
+}
+function openPop(card,j){
+  const row=ROWS[+card.dataset.i];if(!row)return;
+  tip.style.display='none';
+  let vars;
+  if(card._g)vars=card._g.members.map(m=>({row:m.row,img:m.row.img,label:card._g.ru.labels[m.j]||card._g.ru.tokens[m.j]||'#'}));
+  else{
+    const vi=variantInfo(row);
+    vars=vi&&vi.bases.length>1?vi.bases.map((b,k)=>({row,img:b,label:vi.labels[k]})):[{row,img:row.img,label:''}];
+  }
+  POP={vars};
+  $('ptgl').innerHTML=vars.length>1?vars.map((v,k)=>`<button type="button" data-j="${k}">${esc(v.label)}</button>`).join(''):'';
+  const ids=[...new Set(vars.flatMap(v=>v.row.imgs||[]).filter(Boolean))];
+  $('pyl').innerHTML=ids.length?ids.map(x=>esc(x.split(/[\\/]/).pop().replace(/\.(png|jpg|jpeg|webp)$/i,'').replace(/^.*?BUYWEAPON_INFO_/i,''))).join('<br>'):'(no image name)';
+  popRender(Math.min(j||0,vars.length-1));
+  $('pop').classList.add('on');
+}
+function closePop(){$('pop').classList.remove('on');$('ppic').innerHTML='';POP=null}
+$('pclose').onclick=closePop;
+$('pop').addEventListener('click',e=>{
+  if(e.target===$('pop')){closePop();return}
+  const b=e.target.closest('#ptgl button');if(b&&POP)popRender(+b.dataset.j);
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closePop()});
 
 /* ================= KHỞI CHẠY (mỗi lần F5 tải lại Sheet) ================= */
 $('btnSearch').onclick=()=>{state.page=1;render()};
@@ -805,22 +884,31 @@ function dataJsFallback(){
     let refs=[];
     if(CFG.TAB_LIST){                                   // đọc danh sách tab từ tab "TABS" (nếu có)
       try{
-        const t=await loadSheet(CFG.TAB_LIST,0);
-        const names=t.rows.map(r=>cellStr(r.c&&r.c[0])).filter(x=>x&&!x.startsWith('#')&&x.toLowerCase()!==CFG.TAB_LIST.toLowerCase());
+        let col=null;
+        if(CFG.API_KEY){try{const g=await loadStrikes([CFG.TAB_LIST]);if(g[0])col=g[0].map(rw=>{const c=rw&&rw.values&&rw.values[0];return c&&c.formattedValue!=null?String(c.formattedValue).trim():''})}catch(e){}}   // đọc bằng API: không bị bộ lọc
+        if(!col){const t=await loadSheet(CFG.TAB_LIST,0);col=t.rows.map(r=>cellStr(r.c&&r.c[0]))}
+        const names=col.filter(x=>x&&!x.startsWith('#')&&x.toLowerCase()!==CFG.TAB_LIST.toLowerCase());
         if(names.length&&names.length<=40)refs=[...new Set(names)];
       }catch(e){}
     }
     if(!refs.length)refs=(CFG.SHEETS&&CFG.SHEETS.length?CFG.SHEETS:[CFG.GID]).map(String);
-    const res=await Promise.allSettled(refs.map(r=>loadSheet(r)));
-    const okIdx=res.map((x,i)=>x.status==='fulfilled'?i:-1).filter(i=>i>=0);
-    const ok=okIdx.map(i=>parseTable(res[i].value));
-    if(!ok.length)throw res[0].reason;
-    let stNote='';
-    if(CFG.API_KEY){                                    // đọc định dạng gạch ngang thật từ Sheets API
-      try{const st=await loadStrikes(okIdx.map(i=>refs[i]));ok.forEach((t,k)=>{const h=applyStrikes(t.rows,st[k]);if(k===0&&h)HDR_STRIKE=h})}
-      catch(e){stNote=' · Không đọc được định dạng gạch ngang ('+e.message+')'}
+    let ok=null,okIdx=[],bad=[],stNote='';
+    if(CFG.API_KEY){                                    // có khoá API: đọc dữ liệu + gạch ngang trực tiếp bằng Sheets API (không bị bộ lọc ảnh hưởng)
+      try{
+        const g=await loadStrikes(refs),got=[];
+        g.forEach((api,i)=>{if(api&&api.length)got.push({i,api})});
+        if(!got.length)throw new Error('không tìm thấy tab');
+        ok=got.map((x,k)=>{const t=apiTable(x.api),h=applyStrikes(t.rows,x.api);if(k===0&&h)HDR_STRIKE=h;return t});
+        okIdx=got.map(x=>x.i);bad=refs.filter((_,i)=>!okIdx.includes(i));
+      }catch(e){ok=null;stNote=' · Không đọc được bằng Sheets API ('+e.message+'), đang dùng cách đọc thường - dòng bị bộ lọc ẩn trong Sheet có thể không hiện'}
     }
-    const bad=refs.filter((_,i)=>res[i].status==='rejected');
+    if(!ok){                                            // không có khoá API (hoặc API lỗi): đọc qua gviz như cũ
+      const res=await Promise.allSettled(refs.map(r=>loadSheet(r)));
+      okIdx=res.map((x,i)=>x.status==='fulfilled'?i:-1).filter(i=>i>=0);
+      ok=okIdx.map(i=>parseTable(res[i].value));
+      if(!ok.length)throw res[0].reason;
+      bad=refs.filter((_,i)=>res[i].status==='rejected');
+    }
     const seen=new Set();                               // bỏ dòng trùng hệt nhau (phòng khi 1 tab bị đọc 2 lần)
     const allRows=ok.flatMap(x=>x.rows).filter(r=>{const k=r.join('\u0001');if(seen.has(k))return false;seen.add(k);return true});
     build(ok[0].headers,allRows);                       // gộp mọi tab, tiêu đề lấy từ tab đầu tiên
