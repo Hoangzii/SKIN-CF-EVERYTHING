@@ -1,0 +1,5 @@
+[
+  { "name": "Main Page", "path": "/" },
+  { "name": "Weapon",    "path": "/weapon/" },
+  { "name": "Skin",      "path": "/skin/" }
+]
