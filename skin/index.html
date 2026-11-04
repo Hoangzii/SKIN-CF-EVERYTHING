@@ -86,6 +86,31 @@ label.chk{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
 #modal .box img{width:100%;height:100%;object-fit:contain;display:block}
 #modal .x{position:absolute;top:-38px;right:-2px;color:#fff;font:700 26px/1 'Lexend',sans-serif;cursor:pointer;user-select:none}
 
+
+/* ---- Popup chi tiết khi bấm vào skin ---- */
+#pop{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;padding:16px}
+#pop.on{display:flex}
+#pop,#pop *{font-family:'Lexend',system-ui,sans-serif;font-weight:700}   /* toàn bộ chữ trong popup: Lexend Bold */
+#pop .pbox{position:relative;width:min(780px,100%);max-height:92vh;overflow:auto;background:var(--card);color:var(--tx);border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+#pop .phd{background:var(--label);color:var(--label-tx);padding:16px 52px 16px 22px;font-size:18px;font-weight:700;line-height:1.3}
+#pop .px{position:absolute;top:12px;right:16px;font:700 22px/1 'Lexend',sans-serif;cursor:pointer;user-select:none;color:var(--label-tx)}
+#pop .pbd{display:flex;flex-wrap:wrap;gap:24px;padding:20px 22px;align-items:center}
+#pop .pleft{flex:1 1 300px;min-width:0}
+#pop .ppic{position:relative;height:200px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:6px}
+#pop .ppic img.w{max-width:92%;max-height:170px;object-fit:contain}
+#pop .ppic .noimg{font-size:12px;color:var(--sub)}
+#pop .L-tl{left:0;top:0}#pop .L-tr{right:4px;top:4px}#pop .L-bl{left:6px;bottom:6px}#pop .L-br{right:4px;bottom:4px}
+#pop .tgl{display:flex;flex-wrap:wrap;justify-content:center;padding:10px 0 0}
+#pop .tgl button{flex:0 1 auto;height:auto;font-size:12px;padding:5px 12px}
+#pop .preg{flex:1 1 260px;font-size:14px;line-height:1.9}
+#pop .preg table{border-collapse:collapse}
+#pop .preg td{vertical-align:top;padding:0}
+#pop .preg td:first-child{text-align:right;font-weight:700;white-space:nowrap}
+#pop .preg td.sep{padding:0 12px;color:var(--sub)}
+#pop .preg tr.rm td{color:var(--sub);text-decoration:line-through}
+#pop .pyl{background:#000;color:#fbdf89;padding:12px 22px;font-size:14px;font-weight:700;line-height:1.7;text-align:left;word-break:break-all}
+.item{cursor:pointer}
+
 #msg{text-align:center;color:var(--sub);padding:30px;font-size:14px}
 #msg.err{color:#d4380d}
 #msg:empty,.ver:empty{display:none}   /* ẩn khoảng trống khi không có thông báo */
@@ -108,6 +133,7 @@ label.chk{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
 <div id="tip"></div>
 <div id="tm"><div class="p1"></div><div class="p2"></div></div>
 <div id="sp"></div>
+<div id="pop"><div class="pbox"><div class="phd" id="ptitle"></div><span class="px" id="pclose">&times;</span><div class="pbd"><div class="pleft"><div class="ppic" id="ppic"></div><div class="tgl" id="ptgl"></div></div><div class="preg" id="preg"></div></div><div class="pyl" id="pyl"></div></div></div>
 <div id="modal"><div class="box"><div id="mimg"></div><span class="x" id="mx">X</span></div></div>
 
 <script>
@@ -185,6 +211,9 @@ const CFG = {
 
   CLOSED_REGIONS: ['Russia','Indonesia','Korea','Español','Europe','SEA','Japan','Taiwan'],   // khu vực đã ngừng: gạch ngang + xám trong tooltip
   REMOVED_WORDS: ['Removed'],
+  POPUP_REGIONS: ['China','Vietnam','Brazil','West','Philippines'],   // 5 dòng khu vực hiện trong popup khi bấm vào skin (đúng tên cột khu vực trong Sheet)
+  HOVER_TIP: false,              // true = bật lại tooltip khu vực khi rê chuột vào thẻ
+  POPUP_STRIP_PREFIX: true,     // true = dòng vàng bỏ tiền tố BUYWEAPON_INFO_ ; false = hiện nguyên giá trị cột IMAGE
   PER_PAGE: 24
 };
 document.title=CFG.TITLE;document.getElementById('ttl').textContent=CFG.TITLE;
@@ -422,7 +451,13 @@ function cardHTML(r){
 $('grid').addEventListener('click',e=>{
   const sb=e.target.closest('.scopebtn');
   if(sb){openScope(sb.dataset.s);return}
-  const b=e.target.closest('.tgl button');if(!b)return;
+  if(e.target.closest('.tgl')&&!e.target.closest('.tgl button'))return;
+  const b=e.target.closest('.tgl button');
+  if(!b){   // bấm vào thẻ skin => mở popup
+    const card=e.target.closest('.item');if(!card)return;
+    const on=card.querySelector('.tgl button.on');
+    openPop(ROWS[+card.dataset.i],on?+on.dataset.j:0);return;
+  }
   const it=b.closest('.item'),r=ROWS[+it.dataset.i];
   const old=it.querySelector('.pic>.w,.pic>.noimg');
   const html=imgTag(weaponSrcList(r.imgs[+b.dataset.j],r),'w',titleOf(r),dirKey(r))||'<div class="noimg">(no image)</div>';
@@ -562,8 +597,10 @@ $('grid').addEventListener('mousemove',e=>{
   const sb=e.target.closest('.scopebtn');
   if(sb){tip.style.display='none';showScopePreview(sb,e);return}
   sp.style.display='none';
+  tip.style.display='none';
+  if(!CFG.HOVER_TIP)return;   // tooltip khu vực đã tắt (đặt HOVER_TIP:true để bật lại)
   const it=e.target.closest('.item');
-  if(!it){tip.style.display='none';return}
+  if(!it)return;
   const r=ROWS[+it.dataset.i];
   const rows=REGIONS.map((g,i)=>r.reg[i]?`<tr${r.rm[i]?' class="rm"':''}><td>${esc(g.name)}</td><td>${esc((r.disp&&r.disp[i])||r.reg[i])}</td></tr>`:'').join('');
   if(!rows){tip.style.display='none';return}
@@ -590,6 +627,42 @@ function closeScope(){$('modal').classList.remove('on');$('mimg').innerHTML=''}
 $('mx').onclick=closeScope;
 $('modal').addEventListener('click',e=>{if(e.target===$('modal'))closeScope()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeScope()});
+
+
+/* ================= POPUP CHI TIẾT SKIN (bấm vào thẻ) ================= */
+let POPROW=null;
+function popPic(j){
+  const r=POPROW;
+  const img=imgTag(weaponSrcList(r.imgs[j]||r.img,r),'w',r.name,dirKey(r))||'<div class="noimg">(no image)</div>';
+  const ly=CFG.LAYERS.map((L,k)=>r.layers[k].length
+    ?`<div class="ly ${L.pos}">${r.layers[k].map(v=>imgTag(layerSrcList(v,L),'b',v)).join('')}</div>`:'').join('');
+  $('ppic').innerHTML=img;   // chỉ hình cột IMAGE, không có lớp skin/tag/badge
+  $('ptgl').querySelectorAll('button').forEach(b=>b.classList.toggle('on',+b.dataset.j===j));
+}
+function openPop(r,j){
+  POPROW=r;tip.style.display='none';sp.style.display='none';
+  $('ptitle').textContent=r.name;
+  $('ptgl').innerHTML=r.imgs.length>1?r.imgs.map((x,k)=>`<button type="button" data-j="${k}">${esc(r.labels&&r.labels[k]||btnLabel(x,k))}</button>`).join(''):'';
+  const rows=CFG.POPUP_REGIONS.map(n=>{
+    const i=REGIONS.findIndex(g=>g.name.trim().toLowerCase()===n.toLowerCase());
+    const has=i>=0&&r.reg[i];
+    const v=has?esc((r.disp&&r.disp[i])||r.reg[i]):'–';
+    return `<tr${has&&r.rm[i]?' class="rm"':''}><td>${esc(n)}</td><td class="sep">|</td><td>${v}</td></tr>`;
+  }).join('');
+  $('preg').innerHTML=`<table>${rows}</table>`;
+  const cut=new RegExp('^.*?'+CFG.STRIP_PREFIX.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i');
+  const ids=uniq(r.imgs).map(x=>CFG.POPUP_STRIP_PREFIX?x.replace(cut,''):x);
+  $('pyl').innerHTML=ids.length?ids.map(esc).join('<br>'):'(no image name)';
+  popPic(j||0);
+  $('pop').classList.add('on');
+}
+function closePop(){$('pop').classList.remove('on');$('ppic').innerHTML='';POPROW=null}
+$('pclose').onclick=closePop;
+$('pop').addEventListener('click',e=>{
+  if(e.target===$('pop')){closePop();return}
+  const b=e.target.closest('#ptgl button');if(b&&POPROW)popPic(+b.dataset.j);
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closePop()});
 
 /* ================= KHỞI CHẠY (mỗi lần F5 tải lại Sheet) ================= */
 $('btnSearch').onclick=()=>{state.page=1;render()};
