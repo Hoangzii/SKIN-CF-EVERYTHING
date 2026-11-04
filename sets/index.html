@@ -78,9 +78,10 @@ const CONFIG = {
   WEAPON_TABS: ['RIFLE','SNIPER','SMG','MG','SHOTGUN','PISTOL','MELEE','THROW'],
   // Tab WEAPON SETS:
   //   A: SET NAME  = tên set. Nếu cột B để trống thì vũ khí nào có tên (cột A các tab vũ khí) chứa tên set này sẽ thuộc set.
-  //   B: WEAPON IMAGE CODES = mã ảnh các vũ khí của set, điền tay, cách nhau bằng , hoặc ; hoặc xuống dòng
-  //      vd: BUYWEAPON_INFO_EVO3A1_Abyssal, BUYWEAPON_INFO_Grenade_Abyssal, BUYWEAPON_INFO_Card_Abyssal_1
-  //      Có điền cột B thì set CHỈ gồm các mã này (chính xác, không bị trùng sang set khác).
+  //   B: điền tay, các mục cách nhau bằng , hoặc ; hoặc xuống dòng. Mỗi mục là 1 trong 2 dạng:
+  //      - MÃ ĐẦY ĐỦ bắt đầu bằng BUYWEAPON_INFO_ (vd BUYWEAPON_INFO_Grenade_Abyssal): lấy đúng 1 ảnh đó
+  //      - TỪ KHOÁ (vd Abyssal, 12CZS): lấy mọi vũ khí có tên (cột A tab vũ khí) hoặc mã ảnh (cột B tab vũ khí) chứa từ khoá
+  //      Có thể trộn cả hai. Để trống thì dùng tên set (cột A) làm từ khoá.
   //   C: BADGE = từ khoá badge hiện ở góc TRÊN BÊN PHẢI thẻ set (vd VVIP). Để trống nếu không có.
   SETS_TAB: 'WEAPON SETS',
   // Ảnh vũ khí: dùng chung thư mục ảnh của trang /weapon/ (không cần cột ảnh riêng ở tab WEAPON SETS).
@@ -196,11 +197,16 @@ window.__fb = img => {
   else img.replaceWith(Object.assign(document.createElement('span'), {className:'noimg', textContent:'no image'}));
 };
 
-/* Vũ khí thuộc set khi tên vũ khí (cột A của các tab vũ khí) chứa tên set (cột A của tab WEAPON SETS)
-   (chỉ dùng khi cột B của set để trống) */
+/* Mỗi mục ở cột B của tab WEAPON SETS có 2 dạng:
+     1) MÃ ĐẦY ĐỦ, bắt đầu bằng BUYWEAPON_INFO_ (vd BUYWEAPON_INFO_Grenade_Abyssal): lấy đúng 1 ảnh đó, kể cả khi mã không có trong tab vũ khí nào
+     2) TỪ KHOÁ (vd Abyssal, 12CZS): lấy mọi vũ khí có TÊN (cột A tab vũ khí, khớp theo từ nguyên vẹn) hoặc MÃ ẢNH (cột B tab vũ khí, khớp một phần) chứa từ khoá
+   Cột B để trống thì dùng tên set (cột A của tab WEAPON SETS) làm từ khoá. */
 const wordRe = t => new RegExp('(^|[^a-z0-9])' + esc(norm(t)) + '([^a-z0-9]|$)');
-function matches(set, w){
-  return wordRe(set.name.trim()).test(norm(w.name).trim());
+const isFullCode = s => /^buyweapon_info_/i.test(String(s || '').split(/[\\/]/).pop().trim());
+function kwMatch(k, w){
+  const kn = norm(k).trim();
+  if (!kn) return false;
+  return wordRe(k.trim()).test(norm(w.name).trim()) || w.codes.some(c => norm(c).includes(kn));
 }
 
 /* Chuẩn hoá mã ảnh để so sánh: bỏ thư mục, đuôi .png/.jpg, tiền tố BUYWEAPON_INFO_, không phân biệt hoa/thường */
@@ -216,27 +222,22 @@ function buildCodeIndex(){
 }
 
 function membersOf(set){
-  if (set.codes.length){                       // cột B có điền: set gồm đúng các mã này, theo thứ tự đã điền
-    const seen = new Set(), out = [];
-    for (const c of set.codes){
-      const k = normCode(c);
-      if (!k || seen.has(k)) continue;
-      seen.add(k);
-      const hit = CODEIDX.get(k);
-      out.push(hit
-        ? {name: hit.w.name, code: hit.code, hints: hit.w.hints, badges: hit.w.badges}   // có trong tab vũ khí: lấy tên, badge, thư mục ảnh
-        : {name: prettyName(c), code: c, hints: [], badges: []});                       // không có: vẫn hiện ảnh, tên suy từ mã
-    }
-    return out;
-  }
   const seen = new Set(), out = [];
-  for (const w of WEAPONS){
-    if (!matches(set, w)) continue;
-    const codes = w.codes.length ? w.codes : [null];
-    for (const c of codes){
-      const key = c || ('name:' + w.name);
-      if (seen.has(key)) continue;
-      seen.add(key); out.push({name: w.name, code: c, hints: w.hints, badges: w.badges});
+  const add = (m, key) => { if (!seen.has(key)){ seen.add(key); out.push(m); } };
+  const addWeapon = w => {
+    for (const c of (w.codes.length ? w.codes : [null]))
+      add({name: w.name, code: c, hints: w.hints, badges: w.badges}, c ? 'c:' + normCode(c) : 'n:' + norm(w.name));
+  };
+  const entries = set.codes.length ? set.codes : [set.name];   // cột B trống -> dùng tên set làm từ khoá
+  for (const e of entries){                                    // giữ đúng thứ tự đã điền
+    if (isFullCode(e)){
+      const k = normCode(e), hit = CODEIDX.get(k);
+      add(hit
+        ? {name: hit.w.name, code: hit.code, hints: hit.w.hints, badges: hit.w.badges}   // có trong tab vũ khí: lấy tên, badge, thư mục ảnh
+        : {name: prettyName(e), code: e, hints: [], badges: []},                        // không có: vẫn hiện ảnh, tên suy từ mã
+        'c:' + k);
+    } else {
+      WEAPONS.forEach(w => { if (kwMatch(e, w)) addWeapon(w); });
     }
   }
   return out;
