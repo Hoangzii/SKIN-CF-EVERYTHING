@@ -7,56 +7,57 @@
 <link rel="icon" type="image/png" href="/favicon.png">
 <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  :root{--bg:#f5f5f5;--card:#fff;--tx:#111;--head:#0a2540;--pill:#eaf4ff;--pill-line:#b9dcf7;--pill-tx:#12324a;--pill-hover:#d6ebff;--accent:#0078d4;--muted:#6b7785;--line:#e3e8ee;--shadow:0 6px 24px rgba(0,0,0,.08)}
-  @media(prefers-color-scheme:dark){:root{--bg:#141414;--card:#1f1f1f;--tx:#eee;--head:#e8f1ff;--pill:#1d3552;--pill-line:#2f5b8a;--pill-tx:#e6f1ff;--pill-hover:#274a73;--accent:#4da3ff;--muted:#9aa5b1;--line:#333a42;--shadow:0 6px 24px rgba(0,0,0,.5)}}
+  :root{--bg:#fff;--card:#fff;--tx:#111;--head:#111;--blue:#1677ff;--blue-h:#0f63d9;--label:#99ccff;--label-tx:#0a2540;--line:#d9d9d9;--muted:#6b7785;--thumb:#fff;--shadow:0 6px 18px rgba(0,0,0,.18)}
+  @media(prefers-color-scheme:dark){:root{--bg:#141414;--card:#1f1f1f;--tx:#eee;--head:#eee;--blue:#4da3ff;--blue-h:#6ab4ff;--label:#1d3552;--label-tx:#e6f1ff;--line:#3a3f45;--muted:#9aa5b1;--thumb:#262626;--shadow:0 6px 18px rgba(0,0,0,.6)}}
   *{box-sizing:border-box}
   body{margin:0;min-height:100vh;background:var(--bg);color:var(--tx);font-family:'Lexend',system-ui,sans-serif;padding:36px 16px 60px}
-  .wrap{max-width:1100px;margin:0 auto}
-  h1{text-align:center;font-size:28px;font-weight:700;margin:0}
-  .bar{width:56px;height:3px;background:var(--accent);margin:10px auto 22px;border-radius:2px}
-  #status{color:var(--muted);font-size:13px;text-align:center;margin-bottom:16px}
-  #tabs{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-bottom:16px}
-  #tabs button{padding:10px 20px;background:var(--pill);border:1px solid var(--pill-line);border-radius:14px;color:var(--pill-tx);font:600 15px 'Lexend',sans-serif;cursor:pointer;transition:.15s}
-  #tabs button:hover{background:var(--pill-hover);border-color:var(--accent)}
-  #tabs button.on{background:var(--accent);border-color:var(--accent);color:#fff}
-  .tools{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:18px}
-  #search{width:min(340px,100%);padding:11px 16px;border-radius:14px;border:1px solid var(--pill-line);background:var(--card);color:var(--tx);font:400 15px 'Lexend',sans-serif;outline:none}
-  #search:focus{border-color:var(--accent)}
-  .btn{padding:11px 20px;background:var(--pill);border:1px solid var(--pill-line);border-radius:14px;color:var(--pill-tx);font:600 15px 'Lexend',sans-serif;cursor:pointer;transition:.15s}
-  .btn:hover{background:var(--pill-hover);border-color:var(--accent)}
-  .panel{background:var(--card);border-radius:24px;box-shadow:var(--shadow);padding:24px 20px}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:16px 12px}
-  .card{background:var(--pill);border:1px solid var(--pill-line);color:var(--pill-tx);cursor:pointer;text-align:center;font:500 13px 'Lexend',sans-serif;padding:12px 8px;border-radius:14px;transition:.15s}
-  .card:hover{background:var(--pill-hover);border-color:var(--accent);transform:translateY(-2px)}
-  .thumb{height:70px;display:flex;align-items:center;justify-content:center;margin-bottom:8px}
-  .thumb img{max-width:100%;max-height:70px;object-fit:contain}
+  .wrap{max-width:1620px;margin:0 auto;padding:0 8px}
+  h1{text-align:center;font-size:26px;font-weight:700;margin:0 0 14px;color:var(--head)}
+  #status{color:var(--muted);font-size:13px;text-align:center;margin-bottom:14px}
+  .tools{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:16px}
+  #search{width:min(420px,100%);height:34px;padding:0 12px;border-radius:4px;border:1px solid var(--line);background:var(--card);color:var(--tx);font:400 13px 'Lexend',sans-serif;outline:none}
+  #search:focus{border-color:var(--blue)}
+  .btn{height:34px;padding:0 14px;background:var(--card);border:1px solid var(--line);border-radius:4px;color:var(--tx);font:600 13px 'Lexend',sans-serif;cursor:pointer;transition:.15s}
+  .btn:hover{border-color:var(--blue);color:var(--blue)}
+  .btn.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+  .btn.primary:hover{background:var(--blue-h);border-color:var(--blue-h);color:#fff}
+  #tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+  #tabs button{height:34px;padding:0 16px;background:var(--card);border:1px solid var(--line);border-radius:4px;color:var(--tx);font:600 13px 'Lexend',sans-serif;cursor:pointer;transition:.15s}
+  #tabs button:hover{border-color:var(--blue)}
+  #tabs button.on{background:var(--blue);border-color:var(--blue);color:#fff}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
+  .card{position:relative;display:block;width:100%;padding:0;background:var(--card);border:0;border-top:2px solid var(--blue);color:var(--label-tx);cursor:pointer;text-align:center;font:inherit;overflow:hidden;transition:.15s}
+  .card:hover{transform:translateY(-3px);box-shadow:var(--shadow)}
+  .thumb{position:relative;height:112px;display:flex;align-items:center;justify-content:center;background:var(--thumb)}
+  .thumb img{max-width:82%;max-height:90px;object-fit:contain}
   .noimg{color:var(--muted);font-size:11px}
-  .count{color:var(--muted);font-size:11px;margin-top:2px}
-  .badges{display:flex;gap:4px;justify-content:center;flex-wrap:wrap;margin-top:5px}
-  .badges img{height:16px;width:auto}
+  .name{background:var(--label);color:var(--label-tx);padding:12px 8px;min-height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;font:700 12px 'Lexend',sans-serif;line-height:1.35}
+  .count{font-weight:500;font-size:11px;opacity:.75;margin-top:2px}
+  .badges{position:absolute;left:8px;bottom:6px;display:flex;gap:4px}
+  .badges img{height:16px;width:auto;max-width:none;max-height:none}
   #overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:100;padding:20px}
   #overlay.open{display:flex}
-  #popup{background:var(--card);border-radius:24px;box-shadow:var(--shadow);width:min(980px,100%);max-height:88vh;display:flex;flex-direction:column}
-  .pophead{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--line)}
-  #popup h2{margin:0;font-size:20px;font-weight:600;color:var(--head)}
+  #popup{background:var(--card);border-radius:8px;box-shadow:var(--shadow);width:min(1100px,100%);max-height:88vh;display:flex;flex-direction:column}
+  .pophead{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--line)}
+  #popup h2{margin:0;font-size:18px;font-weight:700;color:var(--head)}
   #close{background:none;border:0;color:var(--muted);font-size:26px;cursor:pointer;line-height:1}
   #close:hover{color:var(--tx)}
-  #popbody{overflow:auto;padding:20px 24px 24px}
+  #popbody{overflow:auto;padding:18px 20px 22px}
   .item{cursor:default}
-  .item:hover{transform:none;background:var(--pill);border-color:var(--pill-line)}
+  .item:hover{transform:none;box-shadow:none}
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>Weapon Sets</h1>
-  <div class="bar"></div>
   <div id="status">Đang tải dữ liệu...</div>
-  <div id="tabs"></div>
   <div class="tools">
-    <input id="search" type="search" placeholder="Tìm set...">
+    <input id="search" type="search" placeholder="Tìm Weapon Sets">
+    <button class="btn primary" id="go" type="button">Search</button>
     <button class="btn" id="reset" type="button">Reset</button>
   </div>
-  <div class="panel"><div id="list" class="grid"></div></div>
+  <div id="tabs"></div>
+  <div id="list" class="grid"></div>
 </div>
 
 <div id="overlay"><div id="popup">
@@ -70,7 +71,7 @@ const CONFIG = {
   SHEET_ID: '1GVgZrCybnuEdGPtVE33NMCmwRWSqfgLHIuz2XAXxhoc',   // phần giữa /d/ và /edit trong link sheet
   WEAPON_TABS: ['RIFLE','SNIPER','SMG','MG','SHOTGUN','PISTOL','MELEE','THROW'],
   SETS_TAB: 'WEAPON SETS',   // A: SET NAME | B: GROUP | C: EXTRA KEYWORDS (cách nhau ;) | D: EXCLUDE (cách nhau ;)
-  IMAGE_DIR: 'images/',      // thư mục chứa ảnh BUYWEAPON_INFO_*
+  IMAGE_DIR: '/weapon/img/',      // thư mục chứa ảnh BUYWEAPON_INFO_*
   IMAGE_EXT: '.png',         // đuôi ảnh
   BADGE_DIR: 'images/badges/', // thư mục chứa ảnh badge
   BADGE_EXT: '.png'          // đuôi ảnh badge
@@ -164,8 +165,8 @@ function renderList(){
   $('list').innerHTML = sets.map(s => {
     const m = s.members;
     return `<button class="card" data-i="${SETS.indexOf(s)}">
-      <div class="thumb">${imgTag(m.length ? m[0].code : null)}</div>
-      <div>${s.name}</div>${badgesTag(s.badges)}<div class="count">${m.length} item</div></button>`;
+      <div class="thumb">${imgTag(m.length ? m[0].code : null)}${badgesTag(s.badges)}</div>
+      <div class="name">${s.name}<span class="count">${m.length} item</span></div></button>`;
   }).join('') || '<div class="noimg" style="padding:20px">Không có set nào.</div>';
   $('list').querySelectorAll('.card').forEach(c => c.onclick = () => openSet(SETS[+c.dataset.i]));
 }
@@ -173,7 +174,7 @@ function renderList(){
 function openSet(set){
   $('poptitle').textContent = set.name;
   $('popbody').innerHTML = set.members.map(m =>
-    `<div class="card item"><div class="thumb">${imgTag(m.code)}</div><div>${m.name}</div>${badgesTag(m.badges)}</div>`).join('')
+    `<div class="card item"><div class="thumb">${imgTag(m.code)}${badgesTag(m.badges)}</div><div class="name">${m.name}</div></div>`).join('')
     || '<div class="noimg" style="padding:20px">Chưa có vũ khí nào khớp với set này.</div>';
   $('overlay').classList.add('open');
 }
@@ -182,6 +183,7 @@ $('close').onclick = closePop;
 $('overlay').onclick = e => { if (e.target === $('overlay')) closePop(); };
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closePop(); });
 $('search').oninput = renderList;
+$('go').onclick = renderList;
 $('reset').onclick = () => { $('search').value=''; renderList(); };
 
 async function init(){
@@ -200,7 +202,7 @@ async function init(){
       badges: setTab.badgeCol >= 0 ? splitBadges(r[setTab.badgeCol]) : []
     }));
     SETS.forEach(s => s.members = membersOf(s));
-    $('status').textContent = `${SETS.length} set · ${WEAPONS.length} vũ khí`;
+    $('status').style.display = 'none';
     renderTabs(); renderList();
   }catch(err){
     $('status').textContent = 'Lỗi tải dữ liệu: ' + err.message + ' — kiểm tra SHEET_ID, tên tab và quyền chia sẻ "Anyone with the link".';
