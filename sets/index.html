@@ -70,7 +70,7 @@
 const CONFIG = {
   SHEET_ID: '1GVgZrCybnuEdGPtVE33NMCmwRWSqfgLHIuz2XAXxhoc',   // phần giữa /d/ và /edit trong link sheet
   WEAPON_TABS: ['RIFLE','SNIPER','SMG','MG','SHOTGUN','PISTOL','MELEE','THROW'],
-  SETS_TAB: 'WEAPON SETS',   // A: SET NAME (dùng để nhận diện vũ khí thuộc set) | B: GROUP. Cột C, D không còn dùng.
+  SETS_TAB: 'WEAPON SETS',   // A: SET NAME | B: GROUP | C: EXTRA KEYWORDS (cách nhau , hoặc ;) — đối chiếu với cột A (WEAPON NAME) của các tab vũ khí. Cột D không còn dùng.
   // Ảnh vũ khí: dùng chung thư mục ảnh của trang /weapon/ (không cần cột ảnh riêng ở tab WEAPON SETS).
   // Cách tìm giống hệt trang Weapon: thêm tiền tố BUYWEAPON_INFO_ nếu thiếu, thử thư mục theo cột C/D của dòng vũ khí,
   // thư mục gốc img/, rồi các thư mục con bên dưới; thử cả đuôi .PNG/.png; khớp hoa/thường nhờ /weapon/manifest.json.
@@ -176,10 +176,12 @@ window.__fb = img => {
   else img.replaceWith(Object.assign(document.createElement('span'), {className:'noimg', textContent:'no image'}));
 };
 
-/* Vũ khí thuộc set khi tên vũ khí (cột A của tab vũ khí) chứa nguyên tên set (cột A của tab WEAPON SETS) */
+/* Vũ khí thuộc set khi tên vũ khí (cột A của các tab vũ khí) chứa tên set (cột A của tab WEAPON SETS)
+   HOẶC chứa một trong các từ khoá ở cột C (EXTRA KEYWORDS, cách nhau bằng dấu , hoặc ; hoặc xuống dòng) */
+const wordRe = t => new RegExp('(^|[^a-z0-9])' + esc(norm(t)) + '([^a-z0-9]|$)');
 function matches(set, w){
-  const re = new RegExp('(^|[^a-z0-9])' + esc(norm(set.name)) + '([^a-z0-9]|$)');
-  return re.test(norm(w.name));
+  const name = norm(w.name);
+  return set.terms.some(t => wordRe(t).test(name));
 }
 
 function membersOf(set){
@@ -256,6 +258,8 @@ async function init(){
     SETS = setTab.rows.filter(r => (r[0] || '').trim()).map(r => ({
       name: r[0].trim(),
       group: (r[1] || '').trim() || 'Other',
+      // từ khoá nhận diện = tên set (cột A) + EXTRA KEYWORDS (cột C)
+      terms: [...new Set([r[0].trim(), ...(r[2] || '').split(/[,;\n]+/).map(s => s.trim()).filter(Boolean)])],
       badges: setTab.badgeCol >= 0 ? splitBadges(r[setTab.badgeCol]) : []
     }));
     SETS.forEach(s => s.members = membersOf(s));
