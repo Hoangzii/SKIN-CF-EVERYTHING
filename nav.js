@@ -65,12 +65,10 @@
 
     var btn = box.querySelector(".hzBtn");
     var canHover = window.matchMedia && matchMedia("(hover:hover)").matches;
-    var timer;
     function setOpen(o) { box.classList.toggle("open", o); btn.setAttribute("aria-expanded", o); }
 
-    if (canHover) {                       // máy tính: rê chuột là xổ xuống
-      box.addEventListener("mouseenter", function () { clearTimeout(timer); setOpen(true); });
-      box.addEventListener("mouseleave", function () { timer = setTimeout(function () { setOpen(false); }, 180); });
+    if (canHover) {                       // máy tính: rê chuột là xổ xuống, chỉ đóng khi bấm ra ngoài hoặc nhấn Esc
+      box.addEventListener("mouseenter", function () { setOpen(true); });   // rê chuột vào -> mở, rời chuột ra vẫn giữ mở
     }
     btn.addEventListener("click", function (e) {   // điện thoại/cảm ứng: bấm để mở/đóng
       e.stopPropagation();
