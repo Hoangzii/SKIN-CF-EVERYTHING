@@ -12,14 +12,15 @@
   ];
 
   var css = '\
-#hzNav{position:fixed;top:10px;left:0;z-index:80;font-family:"Lexend",system-ui,sans-serif;font-size:14px}\
-#hzNav .hzBtn{display:flex;align-items:center;gap:8px;height:40px;padding:0 14px 0 12px;border:0;border-radius:0 8px 8px 0;background:#1677ff;color:#fff;font:600 14px/1 "Lexend",system-ui,sans-serif;cursor:pointer;box-shadow:0 2px 8px rgba(22,119,255,.45);transition:background .15s}\
+#hzNav{position:fixed;top:10px;left:16px;z-index:80;font-family:"Lexend",system-ui,sans-serif;font-size:14px}\
+#hzNav .hzBtn{display:flex;align-items:center;gap:8px;height:40px;padding:0 14px 0 12px;border:0;border-radius:8px;background:#1677ff;color:#fff;font:600 14px/1 "Lexend",system-ui,sans-serif;cursor:pointer;box-shadow:0 2px 8px rgba(22,119,255,.45);transition:background .15s}\
 #hzNav .hzBtn:hover{background:#0f63d9}\
 #hzNav .hzBtn svg{width:18px;height:18px;flex:none}\
 #hzNav .hzBtn .hzCh{width:16px;height:16px;transition:transform .2s}\
 #hzNav.open .hzCh{transform:rotate(180deg)}\
-#hzNav .hzList{display:none;position:absolute;top:46px;left:0;min-width:190px;background:var(--card,#fff);color:var(--tx,#111);border:2px solid #1677ff;border-radius:0 8px 8px 0;box-shadow:0 6px 18px rgba(0,0,0,.25);overflow:hidden}\
+#hzNav .hzList{display:none;position:absolute;top:44px;left:0;min-width:190px;background:var(--card,#fff);color:var(--tx,#111);border:2px solid #1677ff;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.25);overflow:hidden}\
 #hzNav.open .hzList{display:block}\
+#hzNav.open::after{content:"";position:absolute;left:0;right:0;top:38px;height:10px}\
 #hzNav .hzList a{display:block;padding:11px 16px;color:inherit;text-decoration:none;white-space:nowrap;border-bottom:1px solid var(--line,#e6e6e6)}\
 #hzNav .hzList a:last-child{border-bottom:0}\
 #hzNav .hzList a:hover{background:rgba(22,119,255,.12)}\
@@ -52,7 +53,7 @@
     var st = document.createElement("style"); st.textContent = css; document.head.appendChild(st);
 
     var box = document.createElement("div"); box.id = "hzNav";
-    box.innerHTML = '<button type="button" class="hzBtn" aria-haspopup="true" aria-expanded="false">' + ICON + '<span>Danh mục</span>' + CHEV + '</button><div class="hzList"></div>';
+    box.innerHTML = '<button type="button" class="hzBtn" aria-haspopup="true" aria-expanded="false">' + ICON + '<span>Category</span>' + CHEV + '</button><div class="hzList"></div>';
     var list = box.querySelector(".hzList");
 
     items.forEach(function (it) {
@@ -63,13 +64,20 @@
     });
 
     var btn = box.querySelector(".hzBtn");
-    btn.addEventListener("click", function (e) {
+    var canHover = window.matchMedia && matchMedia("(hover:hover)").matches;
+    var timer;
+    function setOpen(o) { box.classList.toggle("open", o); btn.setAttribute("aria-expanded", o); }
+
+    if (canHover) {                       // máy tính: rê chuột là xổ xuống
+      box.addEventListener("mouseenter", function () { clearTimeout(timer); setOpen(true); });
+      box.addEventListener("mouseleave", function () { timer = setTimeout(function () { setOpen(false); }, 180); });
+    }
+    btn.addEventListener("click", function (e) {   // điện thoại/cảm ứng: bấm để mở/đóng
       e.stopPropagation();
-      var o = box.classList.toggle("open");
-      btn.setAttribute("aria-expanded", o);
+      if (!canHover) setOpen(!box.classList.contains("open"));
     });
-    document.addEventListener("click", function (e) { if (!box.contains(e.target)) box.classList.remove("open"); });
-    document.addEventListener("keydown", function (e) { if (e.key === "Escape") box.classList.remove("open"); });
+    document.addEventListener("click", function (e) { if (!box.contains(e.target)) setOpen(false); });
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape") setOpen(false); });
 
     document.body.appendChild(box);
   }
