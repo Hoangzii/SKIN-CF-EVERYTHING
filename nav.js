@@ -10,7 +10,8 @@
   var HOME = { name: "Main Page", path: "/" };
   var DEFAULT = [
     { name: "Weapon", path: "/weapon/" },
-    { name: "Skin",   path: "/skin/" }
+    { name: "Skin",   path: "/skin/" },
+    { name: "Weapon Sets",   path: "/sets/" }
   ];
 
   var css = '\
