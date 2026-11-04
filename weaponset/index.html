@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Weapon Sets</title>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b22; --line:#262d38; --text:#e6edf3; --muted:#8b97a6; --accent:#3fb6ff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:'Lexend',system-ui,sans-serif}
+  header{padding:20px 24px 0}
+  h1{margin:0 0 14px;font-size:24px;font-weight:600}
+  #status{color:var(--muted);font-size:13px;padding:0 24px 10px}
+  #tabs{display:flex;gap:6px;flex-wrap:wrap;padding:0 24px;border-bottom:1px solid var(--line)}
+  #tabs button{background:none;border:0;color:var(--muted);font:500 14px 'Lexend',sans-serif;padding:10px 14px;cursor:pointer;border-bottom:2px solid transparent}
+  #tabs button.on{color:var(--text);border-color:var(--accent)}
+  #search{margin:14px 24px 0;width:min(320px,calc(100% - 48px));padding:9px 12px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--text);font:400 14px 'Lexend',sans-serif}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:18px 12px;padding:20px 24px 40px}
+  .card{background:none;border:0;color:var(--text);cursor:pointer;text-align:center;font:400 13px 'Lexend',sans-serif;padding:6px;border-radius:10px}
+  .card:hover{background:var(--panel)}
+  .thumb{height:70px;display:flex;align-items:center;justify-content:center;margin-bottom:8px}
+  .thumb img{max-width:100%;max-height:70px;object-fit:contain}
+  .noimg{color:var(--muted);font-size:11px}
+  .count{color:var(--muted);font-size:11px;margin-top:2px}
+  .badges{display:flex;gap:4px;justify-content:center;flex-wrap:wrap;margin-top:5px}
+  .badges img{height:16px;width:auto}
+  /* popup */
+  #overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;align-items:center;justify-content:center;z-index:10;padding:20px}
+  #overlay.open{display:flex}
+  #popup{background:var(--panel);border:1px solid var(--line);border-radius:14px;width:min(980px,100%);max-height:88vh;display:flex;flex-direction:column}
+  #popup header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--line)}
+  #popup h2{margin:0;font-size:18px;font-weight:600}
+  #close{background:none;border:0;color:var(--muted);font-size:24px;cursor:pointer;line-height:1}
+  #close:hover{color:var(--text)}
+  #popbody{overflow:auto}
+  .item{cursor:default}
+  .item:hover{background:none}
+</style>
+</head>
+<body>
+<header><h1>Weapon Sets</h1></header>
+<div id="status">Đang tải dữ liệu...</div>
+<div id="tabs"></div>
+<input id="search" type="search" placeholder="Tìm set...">
+<div id="list" class="grid"></div>
+
+<div id="overlay"><div id="popup">
+  <header><h2 id="poptitle"></h2><button id="close" aria-label="Đóng">&times;</button></header>
+  <div id="popbody" class="grid"></div>
+</div></div>
+
+<script>
+/* ====== CẤU HÌNH — chỉ sửa phần này ====== */
+const CONFIG = {
+  SHEET_ID: 'DAN_ID_GOOGLE_SHEET_VAO_DAY',   // phần giữa /d/ và /edit trong link sheet
+  WEAPON_TABS: ['RIFLE','SNIPER','SMG','MG','SHOTGUN','PISTOL','MELEE','THROW'],
+  SETS_TAB: 'WEAPON SETS',   // A: SET NAME | B: GROUP | C: EXTRA KEYWORDS (cách nhau ;) | D: EXCLUDE (cách nhau ;)
+  IMAGE_DIR: 'images/',      // thư mục chứa ảnh BUYWEAPON_INFO_*
+  IMAGE_EXT: '.png',         // đuôi ảnh
+  BADGE_DIR: 'images/badges/', // thư mục chứa ảnh badge
+  BADGE_EXT: '.png'          // đuôi ảnh badge
+  // Badge: thêm 1 cột có tiêu đề "BADGES" (ở tab vũ khí và/hoặc tab WEAPON SETS),
+  // ghi tên file badge không có đuôi, cách nhau bằng dấu , hoặc ; — ví dụ: VVIP; Hot
+};
+/* ========================================= */
+
+const $ = id => document.getElementById(id);
+let SETS = [], WEAPONS = [], currentGroup = null;
+
+function parseCSV(text){
+  const rows = []; let row = [], cur = '', q = false;
+  for (let i = 0; i < text.length; i++){
+    const c = text[i];
+    if (q){
+      if (c === '"'){ if (text[i+1] === '"'){ cur += '"'; i++; } else q = false; }
+      else cur += c;
+    } else if (c === '"') q = true;
+    else if (c === ','){ row.push(cur); cur = ''; }
+    else if (c === '\n'){ row.push(cur); rows.push(row); row = []; cur = ''; }
+    else if (c !== '\r') cur += c;
+  }
+  if (cur !== '' || row.length){ row.push(cur); rows.push(row); }
+  return rows;
+}
+
+async function loadTab(name){
+  const url = `https://docs.google.com/spreadsheets/d/${CONFIG.SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(name)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(name + ': HTTP ' + res.status);
+  const all = parseCSV(await res.text());
+  const header = (all[0] || []).map(h => (h || '').trim().toUpperCase());
+  const badgeCol = header.findIndex(h => h === 'BADGES' || h === 'BADGE');
+  return {rows: all.slice(1), badgeCol};
+}
+
+function splitBadges(cell){
+  return (cell || '').split(/[,;\n]+/).map(s => s.trim()).filter(Boolean);
+}
+function badgesTag(list){
+  if (!list || !list.length) return '';
+  return '<div class="badges">' + list.map(b =>
+    `<img src="${CONFIG.BADGE_DIR}${b}${CONFIG.BADGE_EXT}" alt="${b}" title="${b}" onerror="this.remove()">`).join('') + '</div>';
+}
+
+function splitCodes(cell){
+  return (cell || '').split(/[\s,;]+/).map(s => s.trim()).filter(s => /^BUYWEAPON_INFO_/i.test(s));
+}
+const norm = s => (s || '').toLowerCase();
+const esc  = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const imgSrc = code => CONFIG.IMAGE_DIR + code + CONFIG.IMAGE_EXT;
+
+function matches(set, w){
+  const name = norm(w.name), codes = w.codes.map(norm).join(' ');
+  if (set.exclude.some(x => name.includes(x))) return false;
+  const re = new RegExp('(^|[^a-z0-9])' + esc(norm(set.name)) + '([^a-z0-9]|$)');
+  if (re.test(name)) return true;
+  return set.extra.some(x => name.includes(x) || codes.includes(x));
+}
+
+function membersOf(set){
+  const seen = new Set(), out = [];
+  for (const w of WEAPONS){
+    if (!matches(set, w)) continue;
+    const codes = w.codes.length ? w.codes : [null];
+    for (const c of codes){
+      const key = c || ('name:' + w.name);
+      if (seen.has(key)) continue;
+      seen.add(key); out.push({name: w.name, code: c, badges: w.badges});
+    }
+  }
+  return out;
+}
+
+function imgTag(code){
+  if (!code) return '<span class="noimg">no image</span>';
+  return `<img loading="lazy" src="${imgSrc(code)}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'noimg',textContent:'no image'}))">`;
+}
+
+function renderTabs(){
+  const groups = [...new Set(SETS.map(s => s.group))];
+  if (!groups.includes(currentGroup)) currentGroup = groups[0];
+  $('tabs').innerHTML = groups.map(g => `<button class="${g===currentGroup?'on':''}" data-g="${g}">${g}</button>`).join('');
+  $('tabs').querySelectorAll('button').forEach(b => b.onclick = () => { currentGroup = b.dataset.g; renderTabs(); renderList(); });
+}
+
+function renderList(){
+  const q = norm($('search').value);
+  const sets = SETS.filter(s => s.group === currentGroup && (!q || norm(s.name).includes(q)));
+  $('list').innerHTML = sets.map(s => {
+    const m = s.members;
+    return `<button class="card" data-i="${SETS.indexOf(s)}">
+      <div class="thumb">${imgTag(m.length ? m[0].code : null)}</div>
+      <div>${s.name}</div>${badgesTag(s.badges)}<div class="count">${m.length} item</div></button>`;
+  }).join('') || '<div class="noimg" style="padding:20px">Không có set nào.</div>';
+  $('list').querySelectorAll('.card').forEach(c => c.onclick = () => openSet(SETS[+c.dataset.i]));
+}
+
+function openSet(set){
+  $('poptitle').textContent = set.name;
+  $('popbody').innerHTML = set.members.map(m =>
+    `<div class="card item"><div class="thumb">${imgTag(m.code)}</div><div>${m.name}</div>${badgesTag(m.badges)}</div>`).join('')
+    || '<div class="noimg" style="padding:20px">Chưa có vũ khí nào khớp với set này.</div>';
+  $('overlay').classList.add('open');
+}
+const closePop = () => $('overlay').classList.remove('open');
+$('close').onclick = closePop;
+$('overlay').onclick = e => { if (e.target === $('overlay')) closePop(); };
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closePop(); });
+$('search').oninput = renderList;
+
+async function init(){
+  try{
+    const [setTab, ...tabs] = await Promise.all([CONFIG.SETS_TAB, ...CONFIG.WEAPON_TABS].map(loadTab));
+    WEAPONS = tabs.flatMap(t => t.rows.map(r => ({
+      name: (r[0] || '').trim(),
+      codes: splitCodes(r[1]),
+      badges: t.badgeCol >= 0 ? splitBadges(r[t.badgeCol]) : []
+    }))).filter(w => w.name);
+    SETS = setTab.rows.filter(r => (r[0] || '').trim()).map(r => ({
+      name: r[0].trim(),
+      group: (r[1] || '').trim() || 'Other',
+      extra: (r[2] || '').split(';').map(s => norm(s.trim())).filter(Boolean),
+      exclude: (r[3] || '').split(';').map(s => norm(s.trim())).filter(Boolean),
+      badges: setTab.badgeCol >= 0 ? splitBadges(r[setTab.badgeCol]) : []
+    }));
+    SETS.forEach(s => s.members = membersOf(s));
+    $('status').textContent = `${SETS.length} set · ${WEAPONS.length} vũ khí`;
+    renderTabs(); renderList();
+  }catch(err){
+    $('status').textContent = 'Lỗi tải dữ liệu: ' + err.message + ' — kiểm tra SHEET_ID, tên tab và quyền chia sẻ "Anyone with the link".';
+  }
+}
+init();
+</script>
+</body>
+</html>
