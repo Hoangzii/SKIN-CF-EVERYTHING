@@ -78,8 +78,8 @@
     var canHover = window.matchMedia && matchMedia("(hover:hover)").matches;
     function setOpen(o) {
       box.classList.toggle("open", o); arrow.setAttribute("aria-expanded", o);
-      try { if (o) sessionStorage.setItem("hzNavOpen", "1"); else sessionStorage.removeItem("hzNavOpen"); } catch (e) {}
     }
+    try { sessionStorage.removeItem("hzNavOpen"); } catch (e) {}   // xóa trạng thái cũ còn sót từ phiên bản trước
 
     if (canHover) {   // máy tính: rê chuột vào là mở, rời chuột ra vẫn giữ mở
       box.addEventListener("mouseenter", function () { setOpen(true); });
@@ -88,12 +88,14 @@
       e.stopPropagation();
       setOpen(!box.classList.contains("open"));
     });
-    // Chỉ đóng khi bấm ra khoảng trống ngoài khung hoặc nhấn Esc
+    // Đóng khi bấm ra ngoài, nhấn Esc, hoặc bấm vào một mục trong danh sách
     document.addEventListener("click", function (e) { if (!box.contains(e.target)) setOpen(false); });
     document.addEventListener("keydown", function (e) { if (e.key === "Escape") setOpen(false); });
+    list.addEventListener("click", function () { setOpen(false); });
+    // Quay lại bằng nút Back/Forward: trình duyệt có thể khôi phục trang cũ đang mở menu -> đóng lại
+    window.addEventListener("pageshow", function () { setOpen(false); });
 
-    document.body.appendChild(box);
-    try { if (sessionStorage.getItem("hzNavOpen") === "1") setOpen(true); } catch (e) {}   // sang trang khác vẫn giữ menu mở
+    document.body.appendChild(box);   // trang mới luôn bắt đầu ở trạng thái đóng
   }
 
   function start() {
