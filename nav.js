@@ -46,6 +46,7 @@
 
   function build(items) {
     var here = norm(location.pathname);
+    if (here === "/") return;   // Trang chủ đã có menu riêng -> không hiện nút này
 
     // Bỏ "Main Page" khỏi danh sách (vì đã là nút chính)
     items = items.filter(function (i) { return norm(i.path) !== "/"; });
@@ -96,6 +97,7 @@
   }
 
   function start() {
+    if (norm(location.pathname) === "/") return;   // Trang chủ: không hiện nút, chỉ áp dụng cho các trang con (weapon, skin, ...)
     fetch("/nav.json", { cache: "no-cache" })
       .then(function (r) { if (!r.ok) throw 0; return r.json(); })
       .then(function (j) { return Array.isArray(j) && j.length ? j : DEFAULT; })
