@@ -302,6 +302,21 @@ function imgTag(code, hints){
   return `<img loading="lazy" src="${attr(first)}" alt="" data-alts="${attr(JSON.stringify(rest))}" onerror="__fb(this)">`;
 }
 
+/* Ảnh đại diện của set (cột PRESENT): mã đầy đủ / mã ảnh / từ khoá. Để trống hoặc không tìm thấy thì dùng vũ khí đầu tiên của set */
+function presentOf(set){
+  const p = (set.present || '').trim();
+  if (p){
+    const hit = CODEIDX.get(normCode(p));
+    if (hit) return {code: hit.code, hints: hit.w.hints};
+    if (isFullCode(p)) return {code: p, hints: []};
+    const w = WEAPONS.find(x => kwMatch(p, x));
+    if (w) return {code: w.codes[0] || null, hints: w.hints};
+    return {code: p, hints: []};   // không khớp gì: thử dùng thẳng làm mã ảnh
+  }
+  const m = set.members;
+  return m.length ? {code: m[0].code, hints: m[0].hints} : {code: null, hints: null};
+}
+
 function renderTabs(){
   const groups = [...new Set(SETS.map(s => s.group))];
   if (!groups.includes(currentGroup)) currentGroup = groups[0];
@@ -314,9 +329,9 @@ function renderList(){
   const q = norm($('search').value);
   const sets = SETS.filter(s => s.group === currentGroup && (!q || norm(s.name).includes(q)));
   $('list').innerHTML = sets.map(s => {
-    const m = s.members;
+    const pr = presentOf(s);
     return `<button class="card" data-i="${SETS.indexOf(s)}">
-      <div class="thumb">${imgTag(m.length ? m[0].code : null, m.length ? m[0].hints : null)}${badgesTag(s.badges)}${badgesTag(s.corner, 'tr')}</div>
+      <div class="thumb">${imgTag(pr.code, pr.hints)}${badgesTag(s.badges)}${badgesTag(s.corner, 'tr')}</div>
       <div class="name">${s.name}</div></button>`;
   }).join('') || '<div class="noimg" style="padding:20px">Không có set nào.</div>';
   $('list').querySelectorAll('.card').forEach(c => c.onclick = () => openSet(SETS[+c.dataset.i]));
@@ -406,12 +421,16 @@ async function init(){
       badges: t.badgeCol >= 0 ? splitBadges(r[t.badgeCol]) : [],
       regions: regionsOf(r, t.labels)   // cột J–V: tên vũ khí theo khu vực
     }))).filter(w => w.name);
+    // Cột PRESENT và BADGES được nhận theo TIÊU ĐỀ nên chèn cột thêm/đổi vị trí vẫn chạy đúng
+    const presentCol = (setTab.labels || []).findIndex(h => h.toUpperCase() === 'PRESENT');
     SETS = setTab.rows.filter(r => (r[0] || '').trim()).map(r => ({
       name: r[0].trim(),
       group: 'Other',                    // cột B giờ là mã ảnh nên không còn dùng làm nhóm
       codes: splitCodes(r[1]),           // cột B: mã ảnh các vũ khí của set (điền tay)
-      corner: splitBadges(r[2]),         // cột C: badge góc trên bên phải thẻ set
-      badges: setTab.badgeCol >= 0 && setTab.badgeCol !== 2 ? splitBadges(r[setTab.badgeCol]) : []   // cột có tiêu đề BADGES khác cột C (nếu có): hiện góc dưới trái
+      present: presentCol >= 0 ? (r[presentCol] || '').trim() : '',   // cột PRESENT: ảnh đại diện trên thẻ set
+      // BADGES: badge góc trên bên phải thẻ set. Nếu sheet không có tiêu đề BADGES thì lấy cột C (trừ khi C là PRESENT)
+      corner: setTab.badgeCol >= 0 ? splitBadges(r[setTab.badgeCol]) : (presentCol === 2 ? [] : splitBadges(r[2])),
+      badges: []
     }));
     buildCodeIndex();
     SETS.forEach(s => s.members = membersOf(s));
