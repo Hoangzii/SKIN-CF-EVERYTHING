@@ -26,27 +26,39 @@
   #tabs button:hover{border-color:var(--blue)}
   #tabs button.on{background:var(--blue);border-color:var(--blue);color:#fff}
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
-  .card{position:relative;display:block;width:100%;padding:0;background:var(--card);border:0;border-top:2px solid var(--blue);color:var(--label-tx);cursor:pointer;text-align:center;font:inherit;overflow:hidden;transition:.15s}
+  .card{position:relative;display:flex;flex-direction:column;width:100%;padding:0;background:var(--card);border:0;border-top:2px solid var(--blue);color:var(--label-tx);cursor:pointer;text-align:center;font:inherit;overflow:hidden;transition:.15s}
   .card:hover{transform:translateY(-3px);box-shadow:var(--shadow)}
   .thumb{position:relative;height:112px;display:flex;align-items:center;justify-content:center;background:var(--thumb)}
   .thumb img{max-width:82%;max-height:90px;object-fit:contain}
   .noimg{color:var(--muted);font-size:11px}
-  .name{background:var(--label);color:var(--label-tx);padding:12px 8px;min-height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;font:700 12px 'Lexend',sans-serif;line-height:1.35}
+  .name{background:var(--label);color:var(--label-tx);padding:12px 8px;min-height:50px;flex:1 1 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;font:700 12px 'Lexend',sans-serif;line-height:1.35}
   .count{font-weight:500;font-size:11px;opacity:.75;margin-top:2px}
   .badges{position:absolute;left:8px;bottom:6px;display:flex;gap:4px}
   .badges img{height:16px;width:auto;max-width:none;max-height:none}
   .badges.tr{left:auto;bottom:auto;right:6px;top:6px}   /* badge góc trên bên phải của thẻ set (cột C) */
   .badges.tr img{height:24px}
+  /* nút khu vực: trong từng thẻ set (nằm trên tên, như nút biến thể) + trong popup set */
+  .rbar{display:flex;gap:6px;flex-wrap:wrap}
+  .rbar:empty{display:none}
+  .rsel{background:var(--label);display:flex;flex-wrap:nowrap;gap:4px;justify-content:center;padding:8px 6px 0}   /* luôn 1 hàng, nút nhỏ gọn */
+  .rsel+.name{min-height:36px;padding-top:6px}
+  .rsel .vbtn{cursor:pointer;height:22px;padding:0 6px;font-size:10px;white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto}
+  #pregions{padding:12px 20px 0;justify-content:center}
+  .rbtn{height:30px;padding:0 14px;background:var(--card);border:1px solid var(--blue);border-radius:4px;color:var(--blue);font:600 12px 'Lexend',sans-serif;cursor:pointer;transition:.15s}
+  .rbtn:hover{background:var(--label)}
+  .rbtn.on{background:var(--blue);color:#fff}
   #overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:100;padding:20px}
   #overlay.open{display:flex}
-  #popup{background:var(--card);border-radius:8px;box-shadow:var(--shadow);width:min(1500px,100%);max-height:88vh;display:flex;flex-direction:column}
+  #popup{background:var(--card);border-radius:8px;box-shadow:var(--shadow);width:fit-content;min-width:min(420px,100%);max-width:min(1500px,100%);max-height:88vh;display:flex;flex-direction:column}   /* tự co giãn theo số vũ khí, tối đa 6 thẻ mỗi hàng */
   .pophead{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--line)}
   #popup h2{margin:0;font-size:18px;font-weight:700;color:var(--head)}
   #close{background:none;border:0;color:var(--muted);font-size:26px;cursor:pointer;line-height:1}
   #close:hover{color:var(--tx)}
   #popbody{overflow:auto;padding:18px 20px 22px}
   /* tối đa 6 thẻ mỗi hàng (màn hình hẹp thì tự giảm số cột), chữ trong thẻ nhỏ hơn 1px */
-  #popbody.grid{grid-template-columns:repeat(auto-fill,minmax(max(150px,calc((100% - 5*14px)/6)),1fr))}
+  /* số cột = min(số vũ khí, 6) do JS đặt vào --cols: ít vũ khí thì 1 hàng nằm giữa, nhiều thì tối đa 6 thẻ mỗi hàng */
+  #popbody.grid{display:grid;grid-template-columns:repeat(var(--cols,1),minmax(0,230px));justify-content:center;gap:14px}
+  #popbody .card{width:auto}
   #popbody .name{font-size:11px}
   #popbody .noimg{font-size:10px}
   /* thẻ vũ khí trong popup: dùng đúng hiệu ứng hover như thẻ set (nhấc lên + đổ bóng), bấm để mở popup chi tiết */
@@ -88,6 +100,7 @@
 
 <div id="overlay"><div id="popup">
   <div class="pophead"><h2 id="poptitle"></h2><button id="close" aria-label="Đóng">&times;</button></div>
+  <div id="pregions" class="rbar"></div>
   <div id="popbody" class="grid"></div>
 </div></div>
 
@@ -273,14 +286,42 @@ function buildCodeIndex(){
   }
 }
 
-function membersOf(set){
+/* Cột B và PRESENT có thể chia theo khu vực: mỗi dòng "Tên khu vực: mục1, mục2".
+   Dòng không có "Tên:" ở đầu thì thuộc khu vực của dòng trước; các mục điền trước mọi khu vực là mục CHUNG (áp dụng cho mọi khu vực). */
+function parseRegional(cell){
+  const common = [], regs = [];
+  let cur = null;
+  for (const line of String(cell || '').split(/\r?\n/)){
+    const m = line.match(/^\s*([^:,;|]+?)\s*:\s*(.*)$/);
+    let body = line;
+    if (m){
+      const nm = m[1].trim();
+      cur = regs.find(g => norm(g.name) === norm(nm));
+      if (!cur){ cur = {name: nm, codes: []}; regs.push(cur); }
+      body = m[2];
+    }
+    (cur ? cur.codes : common).push(...splitCodes(body));
+  }
+  return {common, regs};
+}
+let ALLREGIONS = [];   // danh sách khu vực của mọi set (theo thứ tự tiêu đề cột J–N trước, rồi theo thứ tự xuất hiện)
+function buildRegionList(){
+  const seen = new Map();
+  SETS.forEach(s => s.regions.forEach(g => { if (!seen.has(norm(g.name))) seen.set(norm(g.name), g.name); }));
+  const out = [];
+  REGION_LABELS.forEach(l => { const k = norm(l); if (seen.has(k)){ out.push(l); seen.delete(k); } });
+  seen.forEach(v => out.push(v));
+  ALLREGIONS = out;
+}
+
+function membersOf(set, list){
   const seen = new Set(), out = [];
   const add = (m, key) => { if (!seen.has(key)){ seen.add(key); out.push(m); } };
   const addWeapon = w => {
     for (const c of (w.codes.length ? w.codes : [null]))
       add({name: w.name, code: c, codes: w.codes, hints: w.hints, badges: w.badges, regions: w.regions}, c ? 'c:' + normCode(c) : 'n:' + norm(w.name));
   };
-  const entries = set.codes.length ? set.codes : [set.name];   // cột B trống -> dùng tên set làm từ khoá
+  const entries = list && list.length ? list : [set.name];   // cột B trống -> dùng tên set làm từ khoá
   for (const e of entries){                                    // giữ đúng thứ tự đã điền
     if (isFullCode(e)){
       const k = normCode(e), hit = CODEIDX.get(k);
@@ -303,8 +344,10 @@ function imgTag(code, hints){
 }
 
 /* Ảnh đại diện của set (cột PRESENT): mã đầy đủ / mã ảnh / từ khoá. Để trống hoặc không tìm thấy thì dùng vũ khí đầu tiên của set */
-function presentOf(set){
-  const p = (set.present || '').trim();
+function presentOf(set, region){
+  const pp = set.presentP || {common: [], regs: []};
+  const rg = region && pp.regs.find(g => norm(g.name) === norm(region));
+  const p = ((rg && rg.codes[0]) || pp.common[0] || '').trim();   // PRESENT riêng của khu vực, không có thì dùng PRESENT chung
   if (p){
     const hit = CODEIDX.get(normCode(p));
     if (hit) return {code: hit.code, hints: hit.w.hints};
@@ -313,9 +356,11 @@ function presentOf(set){
     if (w) return {code: w.codes[0] || null, hints: w.hints};
     return {code: p, hints: []};   // không khớp gì: thử dùng thẳng làm mã ảnh
   }
-  const m = set.members;
+  const rm = region && set.regions.find(g => norm(g.name) === norm(region));
+  const m = rm ? rm.members : set.members;
   return m.length ? {code: m[0].code, hints: m[0].hints} : {code: null, hints: null};
 }
+
 
 function renderTabs(){
   const groups = [...new Set(SETS.map(s => s.group))];
@@ -325,27 +370,57 @@ function renderTabs(){
   $('tabs').querySelectorAll('button').forEach(b => b.onclick = () => { currentGroup = b.dataset.g; renderTabs(); renderList(); });
 }
 
+/* Thẻ set: set có từ 2 khu vực trở lên thì hiện hàng nút khu vực (nằm trên tên, như nút biến thể); bấm nút đổi ảnh đại diện theo khu vực */
+function cardHtml(s){
+  const pr = presentOf(s, s.cur);
+  const rs = s.regions.length > 1
+    ? '<div class="rsel">' + s.regions.map(g => `<button type="button" class="vbtn${norm(g.name) === norm(s.cur) ? ' on' : ''}" data-r="${attr(g.name)}">${attr(g.name)}</button>`).join('') + '</div>'
+    : '';
+  return `<div class="card setcard" data-i="${SETS.indexOf(s)}">
+    <div class="thumb">${imgTag(pr.code, pr.hints)}${badgesTag(s.badges)}${badgesTag(s.corner, 'tr')}</div>
+    ${rs}<div class="name">${s.name}</div></div>`;
+}
 function renderList(){
   const q = norm($('search').value);
   const sets = SETS.filter(s => s.group === currentGroup && (!q || norm(s.name).includes(q)));
-  $('list').innerHTML = sets.map(s => {
-    const pr = presentOf(s);
-    return `<button class="card" data-i="${SETS.indexOf(s)}">
-      <div class="thumb">${imgTag(pr.code, pr.hints)}${badgesTag(s.badges)}${badgesTag(s.corner, 'tr')}</div>
-      <div class="name">${s.name}</div></button>`;
-  }).join('') || '<div class="noimg" style="padding:20px">Không có set nào.</div>';
-  $('list').querySelectorAll('.card').forEach(c => c.onclick = () => openSet(SETS[+c.dataset.i]));
+  $('list').innerHTML = sets.map(cardHtml).join('') || '<div class="noimg" style="padding:20px">Không có set nào.</div>';
 }
+$('list').addEventListener('click', e => {
+  const card = e.target.closest('.card');
+  if (!card) return;
+  const s = SETS[+card.dataset.i];
+  const b = e.target.closest('.vbtn');
+  if (b){ s.cur = b.dataset.r; card.outerHTML = cardHtml(s); return; }   // đổi khu vực ngay trên thẻ, không mở popup
+  openSet(s);
+});
 
-let popMembers = [];
+let popMembers = [], popSet = null, popRegion = '';
 function openSet(set){
-  $('poptitle').textContent = set.name;
-  popMembers = set.members;
-  $('popbody').innerHTML = set.members.map((m, i) =>
-    `<div class="card item" data-k="${i}"><div class="thumb">${imgTag(m.code, m.hints)}${badgesTag(m.badges)}</div><div class="name">${m.name}</div></div>`).join('')
-    || '<div class="noimg" style="padding:20px">Chưa có vũ khí nào khớp với set này.</div>';
+  popSet = set;
+  popRegion = set.cur || (set.regions[0] ? set.regions[0].name : '');   // mở đúng khu vực đang chọn trên thẻ
+  renderPop();
   $('overlay').classList.add('open');
 }
+function renderPop(){
+  const set = popSet;
+  $('poptitle').textContent = set.name;
+  $('pregions').innerHTML = set.regions.length > 1
+    ? set.regions.map(g => `<button type="button" class="rbtn${norm(g.name) === norm(popRegion) ? ' on' : ''}" data-r="${attr(g.name)}">${attr(g.name)}</button>`).join('')
+    : '';
+  const g = set.regions.find(x => norm(x.name) === norm(popRegion));
+  popMembers = g ? g.members : set.members;
+  $('popbody').style.setProperty('--cols', Math.max(1, Math.min(6, popMembers.length)));
+  $('popbody').innerHTML = popMembers.map((m, i) =>
+    `<div class="card item" data-k="${i}"><div class="thumb">${imgTag(m.code, m.hints)}${badgesTag(m.badges)}</div><div class="name">${m.name}</div></div>`).join('')
+    || '<div class="noimg" style="padding:20px">Chưa có vũ khí nào khớp với set này.</div>';
+}
+$('pregions').onclick = e => {
+  const b = e.target.closest('.rbtn');
+  if (!b) return;
+  popRegion = b.dataset.r;
+  popSet.cur = popRegion;   // đồng bộ lại thẻ ngoài trang
+  renderPop(); renderList();
+};
 const closeDetail = () => $('doverlay').classList.remove('open');
 const closePop = () => { closeDetail(); $('overlay').classList.remove('open'); };
 
@@ -426,14 +501,19 @@ async function init(){
     SETS = setTab.rows.filter(r => (r[0] || '').trim()).map(r => ({
       name: r[0].trim(),
       group: 'Other',                    // cột B giờ là mã ảnh nên không còn dùng làm nhóm
-      codes: splitCodes(r[1]),           // cột B: mã ảnh các vũ khí của set (điền tay)
-      present: presentCol >= 0 ? (r[presentCol] || '').trim() : '',   // cột PRESENT: ảnh đại diện trên thẻ set
+      parsed: parseRegional(r[1]),       // cột B: mã ảnh các vũ khí của set (điền tay), có thể chia theo khu vực "Tên khu vực: ..."
+      presentP: parseRegional(presentCol >= 0 ? r[presentCol] : ''),   // cột PRESENT: ảnh đại diện trên thẻ set (cũng có thể chia theo khu vực)
       // BADGES: badge góc trên bên phải thẻ set. Nếu sheet không có tiêu đề BADGES thì lấy cột C (trừ khi C là PRESENT)
       corner: setTab.badgeCol >= 0 ? splitBadges(r[setTab.badgeCol]) : (presentCol === 2 ? [] : splitBadges(r[2])),
       badges: []
     }));
     buildCodeIndex();
-    SETS.forEach(s => s.members = membersOf(s));
+    SETS.forEach(s => {
+      const pc = s.parsed;
+      s.regions = pc.regs.map(g => ({name: g.name, members: membersOf(s, [...pc.common, ...g.codes])}));
+      s.members = s.regions.length ? s.regions[0].members : membersOf(s, pc.common);
+      s.cur = s.regions.length ? s.regions[0].name : '';   // khu vực đang chọn của thẻ
+    });
     $('status').style.display = 'none';
     renderTabs(); renderList();
   }catch(err){
