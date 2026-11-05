@@ -70,6 +70,7 @@
   .dregions .sp{color:var(--muted);font-weight:400}
   .dcodes{background:#000;color:#f3d98b;padding:14px 22px 16px;font:700 14px/1.7 'Lexend',sans-serif;word-break:break-all}
   .dcodes div.on{color:#fff7cf}
+  .dcodes .lb{color:#fff;font-weight:600}
 </style>
 </head>
 <body>
@@ -357,7 +358,7 @@ function openDetail(i){
   const paint = () => {
     $('dimg').innerHTML = imgTag(codes[cur] || null, m.hints);
     $('dvars').innerHTML = labels.map((l, k) => `<button type="button" class="vbtn${k === cur ? ' on' : ''}" data-v="${k}">${attr(l)}</button>`).join('');
-    $('dcodes').innerHTML = codes.map((c, k) => `<div${k === cur ? ' class="on"' : ''}>${attr(rawCode(c))}</div>`).join('');
+    $('dcodes').innerHTML = codes.map((c, k) => `<div${k === cur ? ' class="on"' : ''}><span class="lb">System Name:</span> ${attr(rawCode(c))}</div>`).join('');
   };
   $('dtitle').textContent = m.name;
   // Vũ khí chưa có trong tab vũ khí (không có dữ liệu khu vực): vẫn hiện đủ các khu vực J–N, tên là "-"
