@@ -358,7 +358,10 @@ function openDetail(i){
   const paint = () => {
     $('dimg').innerHTML = imgTag(codes[cur] || null, m.hints);
     $('dvars').innerHTML = labels.map((l, k) => `<button type="button" class="vbtn${k === cur ? ' on' : ''}" data-v="${k}">${attr(l)}</button>`).join('');
-    $('dcodes').innerHTML = codes.map((c, k) => `<div${k === cur ? ' class="on"' : ''}><span class="lb">System Name:</span> ${attr(rawCode(c))}</div>`).join('');
+    // 1 mã: "System Name: <mã>" trên 1 dòng; nhiều mã: "System Name:" rồi xuống dòng liệt kê từng mã (mã đang chọn sáng hơn)
+    $('dcodes').innerHTML = codes.length > 1
+      ? '<div class="lb">System Name:</div>' + codes.map((c, k) => `<div${k === cur ? ' class="on"' : ''}>${attr(rawCode(c))}</div>`).join('')
+      : `<div class="on"><span class="lb">System Name:</span> ${attr(rawCode(codes[0] || ''))}</div>`;
   };
   $('dtitle').textContent = m.name;
   // Vũ khí chưa có trong tab vũ khí (không có dữ liệu khu vực): vẫn hiện đủ các khu vực J–N, tên là "-"

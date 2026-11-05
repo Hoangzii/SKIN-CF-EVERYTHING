@@ -109,6 +109,7 @@ label.chk{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
 #pop .preg td.sep{padding:0 12px;color:var(--sub)}
 #pop .preg tr.rm td{color:var(--sub);text-decoration:line-through}
 #pop .pyl{width:0;min-width:100%;box-sizing:border-box;background:#000;color:#fbdf89;padding:12px 22px;font-size:14px;font-weight:700;line-height:1.7;text-align:left;word-break:break-all}
+#pop .pyl .lb{color:#fff}
 .item{cursor:pointer}
 
 #msg{text-align:center;color:var(--sub);padding:30px;font-size:14px}
@@ -677,7 +678,9 @@ function openPop(r,j){
   $('preg').innerHTML=`<table>${rows}</table>`;
   const cut=new RegExp('^.*?'+CFG.STRIP_PREFIX.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i');
   const ids=uniq(r.imgs).map(x=>CFG.POPUP_STRIP_PREFIX?x.replace(cut,''):x);
-  $('pyl').innerHTML=ids.length?ids.map(esc).join('<br>'):'(no image name)';
+  // 1 mã: "System Name: <mã>" trên 1 dòng; nhiều mã: "System Name:" rồi xuống dòng liệt kê từng mã
+  const names=ids.map(esc);
+  $('pyl').innerHTML='<span class="lb">System Name:</span>'+(names.length>1?'<br>'+names.join('<br>'):' '+(names[0]||'(no image name)'));
   popPic(j||0);
   $('pop').classList.add('on');
 }

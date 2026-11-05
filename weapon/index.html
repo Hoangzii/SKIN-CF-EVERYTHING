@@ -90,6 +90,7 @@ label.chk{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
 #pop .preg tr.rm td{color:var(--sub);text-decoration:line-through}
 #pop .preg s{text-decoration:line-through}
 #pop .pyl{width:0;min-width:100%;box-sizing:border-box;background:#000;color:#fbdf89;padding:12px 22px;font-size:14px;line-height:1.7;text-align:left;word-break:break-all}
+#pop .pyl .lb{color:#fff}
 .item{cursor:pointer}
 #msg{text-align:center;color:var(--sub);padding:30px;font-size:14px}
 #msg.err{color:#d4380d}
@@ -853,7 +854,9 @@ function openPop(card,j){
   POP={vars};
   $('ptgl').innerHTML=vars.length>1?vars.map((v,k)=>`<button type="button" data-j="${k}">${esc(v.label)}</button>`).join(''):'';
   const ids=[...new Set(vars.flatMap(v=>v.row.imgs||[]).filter(Boolean))];
-  $('pyl').innerHTML=ids.length?ids.map(x=>esc(x.split(/[\\/]/).pop().replace(/\.(png|jpg|jpeg|webp)$/i,'').replace(/^.*?BUYWEAPON_INFO_/i,''))).join('<br>'):'(no image name)';
+  const names=ids.map(x=>esc(x.split(/[\\/]/).pop().replace(/\.(png|jpg|jpeg|webp)$/i,'').replace(/^.*?BUYWEAPON_INFO_/i,'')));
+  // 1 mã: "System Name: <mã>" trên 1 dòng; nhiều mã: "System Name:" rồi xuống dòng liệt kê từng mã
+  $('pyl').innerHTML='<span class="lb">System Name:</span>'+(names.length>1?'<br>'+names.join('<br>'):' '+(names[0]||'(no image name)'));
   popRender(Math.min(j||0,vars.length-1));
   $('pop').classList.add('on');
 }
