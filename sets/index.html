@@ -49,8 +49,27 @@
   #popbody.grid{grid-template-columns:repeat(auto-fill,minmax(max(150px,calc((100% - 5*14px)/6)),1fr))}
   #popbody .name{font-size:11px}
   #popbody .noimg{font-size:10px}
-  .item{cursor:default}
-  .item:hover{transform:none;box-shadow:none}
+  /* thẻ vũ khí trong popup: dùng đúng hiệu ứng hover như thẻ set (nhấc lên + đổ bóng), bấm để mở popup chi tiết */
+  .item{cursor:pointer}
+  /* popup chi tiết vũ khí (nằm trên popup set): ảnh + nút biến thể + tên theo khu vực (cột J–V) + mã ảnh */
+  #doverlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:200;padding:20px}
+  #doverlay.open{display:flex}
+  #dpop{background:var(--card);color:var(--tx);border-radius:8px;box-shadow:var(--shadow);width:min(780px,100%);max-height:90vh;overflow:auto;display:flex;flex-direction:column}
+  .dhead{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 22px;background:var(--label);color:var(--label-tx)}
+  .dhead h2{margin:0;font-size:18px;font-weight:700}
+  #dclose{background:none;border:0;color:var(--label-tx);font-size:26px;cursor:pointer;line-height:1}
+  .dmain{display:flex;flex-wrap:wrap;gap:24px;align-items:center;padding:20px 22px}
+  .dleft{flex:0 0 376px;max-width:100%;display:flex;flex-direction:column;align-items:center;gap:10px}
+  .dbox{width:100%;height:200px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:6px;background:var(--thumb)}
+  .dbox img{max-width:88%;max-height:170px;object-fit:contain}
+  .dvars{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+  .vbtn{height:26px;padding:0 12px;background:var(--card);border:1px solid var(--blue);border-radius:4px;color:var(--blue);font:700 12px 'Lexend',sans-serif;cursor:pointer}
+  .vbtn.on{background:var(--blue);color:#fff}
+  .dregions{flex:1 1 220px;display:grid;grid-template-columns:auto auto 1fr;column-gap:12px;row-gap:10px;align-items:baseline;font:700 14px 'Lexend',sans-serif}
+  .dregions .rg{text-align:right}
+  .dregions .sp{color:var(--muted);font-weight:400}
+  .dcodes{background:#000;color:#f3d98b;padding:14px 22px 16px;font:700 14px/1.7 'Lexend',sans-serif;word-break:break-all}
+  .dcodes div.on{color:#fff7cf}
 </style>
 </head>
 <body>
@@ -69,6 +88,15 @@
 <div id="overlay"><div id="popup">
   <div class="pophead"><h2 id="poptitle"></h2><button id="close" aria-label="Đóng">&times;</button></div>
   <div id="popbody" class="grid"></div>
+</div></div>
+
+<div id="doverlay"><div id="dpop">
+  <div class="dhead"><h2 id="dtitle"></h2><button id="dclose" aria-label="Đóng">&times;</button></div>
+  <div class="dmain">
+    <div class="dleft"><div id="dimg" class="dbox"></div><div id="dvars" class="dvars"></div></div>
+    <div id="dregions" class="dregions"></div>
+  </div>
+  <div id="dcodes" class="dcodes"></div>
 </div></div>
 
 <script>
@@ -91,7 +119,11 @@ const CONFIG = {
   IMG_DIR: 'img/',
   IMG_SUBDIRS: ['RIFLE','SNIPER','SMG','SHOTGUN','MG','PISTOL','MELEE','GRENADE','FLASHBANG','SMOKE'],
   IMG_PREFIX: 'BUYWEAPON_INFO',
-  BADGE_DIR: 'img/badges/'   // thư mục badge (nằm trong thư mục weapon), file tag_<tên>.PNG như trang Weapon
+  BADGE_DIR: 'img/badges/',   // thư mục badge (nằm trong thư mục weapon), file tag_<tên>.PNG như trang Weapon
+  // Tên vũ khí theo khu vực: các cột J → V (số thứ tự bắt đầu từ 0: J=9 ... V=21) của MỌI tab vũ khí.
+  // Tiêu đề cột (dòng 1) là tên khu vực; ô nào có dữ liệu thì hiện trong tooltip khi rê chuột vào vũ khí ở popup.
+  REGION_COL_FROM: 9,
+  REGION_COL_TO: 21
   // Badge: từ khoá = tên file badge bỏ "tag_" và đuôi, vd tag_VVIP.PNG -> VVIP. Nhiều badge cách nhau bằng dấu , hoặc ;
 };
 /* ========================================= */
@@ -129,15 +161,27 @@ function loadTab(name){
       cleanup();
       if (!r || r.status !== 'ok') return reject(new Error(name + ': ' + JSON.stringify((r && r.errors) || r)));
       const t = r.table;
-      let headers = t.cols.map(c => (c.label || '').trim().toUpperCase());
+      let labels = t.cols.map(c => (c.label || '').trim());
       const rows = t.rows.map(rw => t.cols.map((_, i) => cellStr(rw.c && rw.c[i])));
-      if (headers.every(h => !h) && rows.length) headers = rows.shift().map(h => h.trim().toUpperCase());
-      resolve({rows, badgeCol: headers.findIndex(h => h === 'BADGES' || h === 'BADGE')});
+      if (labels.every(h => !h) && rows.length) labels = rows.shift().map(h => h.trim());
+      const headers = labels.map(h => h.toUpperCase());
+      resolve({rows, labels, badgeCol: headers.findIndex(h => h === 'BADGES' || h === 'BADGE')});
     };
     s.onerror = () => { cleanup(); reject(new Error(name + ': không tải được (sai tên tab, chưa chia sẻ hoặc mất mạng)')); };
     s.src = `https://docs.google.com/spreadsheets/d/${CONFIG.SHEET_ID}/gviz/tq?sheet=${encodeURIComponent(name)}&headers=1&tqx=out:json;responseHandler:${cb}&_=${Date.now()}`;
     document.head.appendChild(s);
   });
+}
+
+/* Tên vũ khí theo khu vực: đọc cột J–V của 1 dòng; tiêu đề cột = tên khu vực (trống thì dùng chữ cái cột) */
+const colLetter = n => { let s = ''; for (n++; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + (n - 1) % 26) + s; return s; };
+function regionsOf(r, labels){
+  const out = [];
+  for (let i = CONFIG.REGION_COL_FROM; i <= CONFIG.REGION_COL_TO; i++){
+    const v = (r[i] || '').trim();
+    if (v) out.push({region: (labels && labels[i]) || colLetter(i), name: v});
+  }
+  return out;
 }
 
 function splitBadges(cell){
@@ -226,15 +270,15 @@ function membersOf(set){
   const add = (m, key) => { if (!seen.has(key)){ seen.add(key); out.push(m); } };
   const addWeapon = w => {
     for (const c of (w.codes.length ? w.codes : [null]))
-      add({name: w.name, code: c, hints: w.hints, badges: w.badges}, c ? 'c:' + normCode(c) : 'n:' + norm(w.name));
+      add({name: w.name, code: c, codes: w.codes, hints: w.hints, badges: w.badges, regions: w.regions}, c ? 'c:' + normCode(c) : 'n:' + norm(w.name));
   };
   const entries = set.codes.length ? set.codes : [set.name];   // cột B trống -> dùng tên set làm từ khoá
   for (const e of entries){                                    // giữ đúng thứ tự đã điền
     if (isFullCode(e)){
       const k = normCode(e), hit = CODEIDX.get(k);
       add(hit
-        ? {name: hit.w.name, code: hit.code, hints: hit.w.hints, badges: hit.w.badges}   // có trong tab vũ khí: lấy tên, badge, thư mục ảnh
-        : {name: prettyName(e), code: e, hints: [], badges: []},                        // không có: vẫn hiện ảnh, tên suy từ mã
+        ? {name: hit.w.name, code: hit.code, codes: hit.w.codes, hints: hit.w.hints, badges: hit.w.badges, regions: hit.w.regions}   // có trong tab vũ khí: lấy tên, badge, thư mục ảnh, mã biến thể, tên theo khu vực
+        : {name: prettyName(e), code: e, codes: [e], hints: [], badges: [], regions: []},                                            // không có: vẫn hiện ảnh, tên suy từ mã
         'c:' + k);
     } else {
       WEAPONS.forEach(w => { if (kwMatch(e, w)) addWeapon(w); });
@@ -270,17 +314,62 @@ function renderList(){
   $('list').querySelectorAll('.card').forEach(c => c.onclick = () => openSet(SETS[+c.dataset.i]));
 }
 
+let popMembers = [];
 function openSet(set){
   $('poptitle').textContent = set.name;
-  $('popbody').innerHTML = set.members.map(m =>
-    `<div class="card item"><div class="thumb">${imgTag(m.code, m.hints)}${badgesTag(m.badges)}</div><div class="name">${m.name}</div></div>`).join('')
+  popMembers = set.members;
+  $('popbody').innerHTML = set.members.map((m, i) =>
+    `<div class="card item" data-k="${i}"><div class="thumb">${imgTag(m.code, m.hints)}${badgesTag(m.badges)}</div><div class="name">${m.name}</div></div>`).join('')
     || '<div class="noimg" style="padding:20px">Chưa có vũ khí nào khớp với set này.</div>';
   $('overlay').classList.add('open');
 }
-const closePop = () => $('overlay').classList.remove('open');
+const closeDetail = () => $('doverlay').classList.remove('open');
+const closePop = () => { closeDetail(); $('overlay').classList.remove('open'); };
+
+/* ===== Popup chi tiết vũ khí: bấm vào 1 vũ khí trong popup set ===== */
+/* Nhãn nút biến thể: mã đầu tiên = Default; các mã sau lấy phần đuôi so với mã đầu (Silencer / Scope / Ext. Mag, còn lại giữ nguyên đuôi) */
+const rawCode = c => String(c || '').split(/[\\/]/).pop().replace(/\.(png|jpg|jpeg|webp)$/i, '').replace(/^buyweapon_info_/i, '').trim();
+function variantLabels(codes){
+  const first = rawCode(codes[0]);
+  return codes.map((c, i) => {
+    if (!i) return 'Default';
+    const r = rawCode(c);
+    const suf = (r.toLowerCase().startsWith(first.toLowerCase()) ? r.slice(first.length) : r).replace(/^[_\s-]+/, '');
+    if (/sil/i.test(suf)) return 'Silencer';
+    if (/scope/i.test(suf)) return 'Scope';
+    if (/ext|mag/i.test(suf)) return 'Ext. Mag';
+    return suf.replace(/_/g, ' ') || 'Variant ' + (i + 1);
+  });
+}
+function openDetail(i){
+  const m = popMembers[i];
+  if (!m) return;
+  const codes = m.codes && m.codes.length ? m.codes : (m.code ? [m.code] : []);
+  let cur = Math.max(0, codes.findIndex(c => normCode(c) === normCode(m.code)));   // mở đúng biến thể vừa bấm
+  const labels = codes.length > 1 ? variantLabels(codes) : [];
+  const paint = () => {
+    $('dimg').innerHTML = imgTag(codes[cur] || null, m.hints);
+    $('dvars').innerHTML = labels.map((l, k) => `<button type="button" class="vbtn${k === cur ? ' on' : ''}" data-v="${k}">${attr(l)}</button>`).join('');
+    $('dcodes').innerHTML = codes.map((c, k) => `<div${k === cur ? ' class="on"' : ''}>${attr(c)}</div>`).join('');
+  };
+  $('dtitle').textContent = m.name;
+  $('dregions').innerHTML = m.regions && m.regions.length
+    ? m.regions.map(r => `<span class="rg">${attr(r.region)}</span><span class="sp">|</span><span>${attr(r.name)}</span>`).join('')
+    : '<span class="noimg" style="grid-column:1/-1">Chưa có tên theo khu vực.</span>';
+  $('dcodes').style.display = codes.length ? '' : 'none';
+  $('dvars').onclick = e => { const b = e.target.closest('.vbtn'); if (b){ cur = +b.dataset.v; paint(); } };
+  paint();
+  $('doverlay').classList.add('open');
+}
+$('popbody').addEventListener('click', e => { const it = e.target.closest('.item'); if (it) openDetail(+it.dataset.k); });
+$('dclose').onclick = closeDetail;
+$('doverlay').onclick = e => { if (e.target === $('doverlay')) closeDetail(); };
 $('close').onclick = closePop;
 $('overlay').onclick = e => { if (e.target === $('overlay')) closePop(); };
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closePop(); });
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  if ($('doverlay').classList.contains('open')) closeDetail(); else closePop();   // Esc: đóng popup chi tiết trước, rồi mới đóng popup set
+});
 $('search').oninput = renderList;
 $('go').onclick = renderList;
 $('reset').onclick = () => { $('search').value=''; renderList(); };
@@ -298,7 +387,8 @@ async function init(){
       name: (r[0] || '').trim(),
       codes: splitCodes(r[1]),
       hints: [r[2], r[3]],   // cột C (TYPE), D (CATEGORIZED): gợi ý thư mục ảnh, như trang Weapon
-      badges: t.badgeCol >= 0 ? splitBadges(r[t.badgeCol]) : []
+      badges: t.badgeCol >= 0 ? splitBadges(r[t.badgeCol]) : [],
+      regions: regionsOf(r, t.labels)   // cột J–V: tên vũ khí theo khu vực
     }))).filter(w => w.name);
     SETS = setTab.rows.filter(r => (r[0] || '').trim()).map(r => ({
       name: r[0].trim(),
