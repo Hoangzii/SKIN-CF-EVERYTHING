@@ -133,6 +133,7 @@ const CONFIG = {
 
 const $ = id => document.getElementById(id);
 let SETS = [], WEAPONS = [], currentGroup = null;
+let REGION_LABELS = [];   // tên các khu vực đang hoạt động (cột J–N) lấy từ tiêu đề sheet — dùng khi vũ khí chưa có trong tab vũ khí
 
 function parseCSV(text){
   const rows = []; let row = [], cur = '', q = false;
@@ -356,11 +357,13 @@ function openDetail(i){
   const paint = () => {
     $('dimg').innerHTML = imgTag(codes[cur] || null, m.hints);
     $('dvars').innerHTML = labels.map((l, k) => `<button type="button" class="vbtn${k === cur ? ' on' : ''}" data-v="${k}">${attr(l)}</button>`).join('');
-    $('dcodes').innerHTML = codes.map((c, k) => `<div${k === cur ? ' class="on"' : ''}>${attr(c)}</div>`).join('');
+    $('dcodes').innerHTML = codes.map((c, k) => `<div${k === cur ? ' class="on"' : ''}>${attr(rawCode(c))}</div>`).join('');
   };
   $('dtitle').textContent = m.name;
-  $('dregions').innerHTML = m.regions && m.regions.length
-    ? m.regions.map(r => `<span class="rg">${attr(r.region)}</span><span class="sp">|</span><span>${attr(r.name)}</span>`).join('')
+  // Vũ khí chưa có trong tab vũ khí (không có dữ liệu khu vực): vẫn hiện đủ các khu vực J–N, tên là "-"
+  const regs = m.regions && m.regions.length ? m.regions : REGION_LABELS.map(l => ({region: l, name: '-'}));
+  $('dregions').innerHTML = regs.length
+    ? regs.map(r => `<span class="rg">${attr(r.region)}</span><span class="sp">|</span><span>${attr(r.name)}</span>`).join('')
     : '<span class="noimg" style="grid-column:1/-1">Chưa có tên theo khu vực.</span>';
   $('dcodes').style.display = codes.length ? '' : 'none';
   $('dvars').onclick = e => { const b = e.target.closest('.vbtn'); if (b){ cur = +b.dataset.v; paint(); } };
@@ -389,6 +392,9 @@ async function init(){
     if (res[0].status !== 'fulfilled') throw res[0].reason;   // tab WEAPON SETS bắt buộc phải tải được
     const setTab = res[0].value;
     const tabs = res.slice(1).filter(x => x.status === 'fulfilled').map(x => x.value);   // tab vũ khí nào lỗi thì bỏ qua
+    const lt = tabs.find(t => t.labels && t.labels.slice(CONFIG.REGION_COL_FROM, CONFIG.REGION_COL_ACTIVE_TO + 1).some(Boolean));
+    REGION_LABELS = [];
+    if (lt) for (let i = CONFIG.REGION_COL_FROM; i <= CONFIG.REGION_COL_ACTIVE_TO; i++) REGION_LABELS.push(lt.labels[i] || colLetter(i));
     WEAPONS = tabs.flatMap(t => t.rows.map(r => ({
       name: (r[0] || '').trim(),
       codes: splitCodes(r[1]),
