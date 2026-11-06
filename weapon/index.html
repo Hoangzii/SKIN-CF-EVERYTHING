@@ -34,7 +34,7 @@ label.chk{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
 .tm .mi{display:flex;justify-content:space-between;gap:14px;padding:7px 12px;cursor:pointer;white-space:nowrap}
 .tm .mi:hover,.tm .mi.act{background:var(--accent);color:#fff}
 .tm .mi .ar{font-size:9px;opacity:.7;align-self:center}
-.grid{--gap:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(max(120px,calc((100% - 5*var(--gap))/6)),1fr));gap:var(--gap);max-width:1600px;margin:18px auto}
+.grid{--gap:14px;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:var(--gap);max-width:1600px;margin:18px auto}
 .item{background:var(--card);border-top:3px solid var(--label);border-radius:2px;padding:10px 8px 0;display:flex;flex-direction:column;align-items:center;min-height:124px;position:relative;box-shadow:0 1px 3px rgba(0,0,0,.08);transition:transform .12s,box-shadow .12s}
 .item:hover{transform:translateY(-2px);box-shadow:0 4px 10px rgba(0,0,0,.18);border-top-color:var(--accent)}
 .item .pic{height:100px;width:100%;display:flex;align-items:center;justify-content:center}
@@ -95,6 +95,7 @@ label.chk{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
 #msg{text-align:center;color:var(--sub);padding:30px;font-size:14px}
 #msg.err{color:#d4380d}
 #msg:empty,.ver:empty{display:none}   /* ẩn khoảng trống khi không có thông báo */
+.grid{}@media(max-width:900px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:560px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 </head>
 <body>
@@ -175,7 +176,7 @@ const CFG = {
   REMOVED_WORDS: ['Removed','Closed'],   // từ đánh dấu ngừng hoạt động trong ô khu vực (thêm từ khác nếu cần, vd 'Đã gỡ')
   POPUP_REGIONS: ['China','Vietnam','Brazil','West','Philippines'],   // 5 dòng khu vực trong popup (đúng tên cột khu vực trong Sheet)
   HOVER_TIP: false,   // true = bật lại tooltip khu vực khi rê chuột vào thẻ
-  PER_PAGE: 24,
+  PER_PAGE: 20,
   // Menu CLASS (cột F → G) và SPECIAL (cột H). Sửa tại đây nếu cần.
   CLASS_LABEL: 'CLASS',
   CLASS_MENU: [                            // thứ tự menu CLASS
@@ -793,18 +794,15 @@ function render(){
   }).join('');
   [...$('grid').children].forEach((el,k)=>{el._g=slice[k].members?slice[k]:null});
   // pager
-  let p=`<span>per page</span><input type="number" min="1" id="pp" value="${per}"><span>items</span>
-    <button id="pPrev" ${state.page<=1?'disabled':''}>‹</button>`;
+  let p=`<button id="pPrev" ${state.page<=1?'disabled':''}>‹</button>`;
   const show=new Set([1,pages,state.page-1,state.page,state.page+1].filter(x=>x>=1&&x<=pages));
   let last=0;[...show].sort((a,b)=>a-b).forEach(x=>{if(x-last>1)p+='<span>…</span>';p+=`<button class="pg ${x===state.page?'on':''}" data-p="${x}">${x}</button>`;last=x});
   p+=`<button id="pNext" ${state.page>=pages?'disabled':''}>›</button>
-    <span>Jump to</span><input type="number" min="1" max="${pages}" id="pj" value="${state.page}"><button id="pGo">Go</button>
-    <span style="color:var(--sub)">A total of ${list.length} items</span>`;
+    <span>Jump to</span><input type="number" min="1" max="${pages}" id="pj" value="${state.page}"><button id="pGo">Go</button>`;
   $('pager').innerHTML=p;
   $('pPrev').onclick=()=>{state.page--;render()};$('pNext').onclick=()=>{state.page++;render()};
   document.querySelectorAll('.pg').forEach(b=>b.onclick=()=>{state.page=+b.dataset.p;render()});
   $('pGo').onclick=()=>{state.page=Math.min(pages,Math.max(1,+$('pj').value||1));render()};
-  $('pp').onchange=e=>{state.per=Math.max(1,+e.target.value||CFG.PER_PAGE);state.page=1;render()};
 }
 
 /* ================= TOOLTIP THEO KHU VỰC ================= */
