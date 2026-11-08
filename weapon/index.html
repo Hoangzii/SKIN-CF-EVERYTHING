@@ -216,7 +216,11 @@ const CFG = {
   // Khoá Google Sheets API (miễn phí) - cần nếu muốn (1) web nhận định dạng GẠCH NGANG thật của ô (cột J–V) và (2) bộ lọc "Create a filter" trong Sheet KHÔNG làm mất dòng trên web.
   // Có khoá thì web đọc toàn bộ dữ liệu bằng Sheets API (bỏ qua bộ lọc). Không có khoá thì đọc qua gviz: dòng bị bộ lọc ẩn sẽ không hiện (dùng "Filter views" thì không sao).
   // Để trống '' thì web chỉ nhận chữ gạch ngang kiểu Unicode (R̶u̶s̶s̶i̶a̶) và chữ "Removed". Xem hướng dẫn tạo khoá trong tin nhắn.
-  API_KEY: ''
+  API_KEY: '',
+  // Tự điền tên khu vực (cột K–O) từ thư mục "ITEMCFT WORLD" (file regions.json do Cloudflare tạo khi build). Để '' để tắt.
+  // Ô có chữ trong Sheet luôn được ưu tiên; ô trống mới tự điền; ghi "-" vào ô = khu vực đó không có.
+  AUTO_REGIONS: 'regions.json',
+  AUTO_MARK: false   // true (hoặc thêm ?auto vào cuối link) = tô màu những tên được tự điền để kiểm tra
 };
 
 /* ================= DỮ LIỆU SCOPE (đối chiếu weapon/img/SCOPE, bổ sung từ trang /skin/) =================
@@ -1045,7 +1049,8 @@ function popRender(k){
   $('preg').innerHTML='<table>'+CFG.POPUP_REGIONS.map(n=>{
     const i=REGIONS.findIndex(g=>g.name.trim().toLowerCase()===n.toLowerCase());
     const has=i>=0&&r.reg[i];
-    return `<tr${has&&r.rm[i]?' class="rm"':''}><td>${esc(n)}</td><td class="sep">|</td><td>${has?regHTML(r,i):'–'}</td></tr>`;
+    const au=has&&AUTO_SHOW&&r.raw.auto&&r.raw.auto.has(REGIONS[i].idx);
+    return `<tr${has&&r.rm[i]?' class="rm"':''}><td>${esc(n)}</td><td class="sep">|</td><td${au?' style="color:#1a73e8" title="Tự điền từ ITEMCFT WORLD"':''}>${has?regHTML(r,i):'–'}</td></tr>`;
   }).join('')+'</table>';
 }
 function openPop(card,j){
@@ -1073,6 +1078,104 @@ $('pop').addEventListener('click',e=>{
   const b=e.target.closest('#ptgl button');if(b&&POP)popRender(+b.dataset.j);
 });
 document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;if($('modal').classList.contains('on'))closeScope();else closePop()});
+
+/* ================= TỰ ĐIỀN TÊN KHU VỰC TỪ "ITEMCFT WORLD" (weapon/regions.json) =================
+   - Ô khu vực trong Sheet có chữ  => luôn dùng chữ trong Sheet (sửa tay trong Sheet là thắng).
+   - Ô trống                       => tự lấy tên từ file Item??.csv của khu vực đó.
+   - Ô ghi "-"                     => khu vực đó KHÔNG có vũ khí này, không tự điền.
+   Cách nhận diện vũ khí: so tên các ô khu vực đã có (và cột A) với tên trong file CSV -> ra mã _ItemIndexInBute -> lấy tên ở khu vực khác.
+   Nếu cùng 1 vũ khí có 2 dòng (vd bản Trung Quốc và bản _NM), dòng nào đã có tên ở khu vực đó thì dòng kia không bị điền thêm. */
+const AUTO_NORM = s => String(s || '').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+const AUTO_BLANK = /^[\s\-–—]+$/;
+
+function autoFillRegions(headers, rows, data, opt) {
+  opt = opt || {};
+  const from = opt.from, to = opt.to, nameCol = opt.nameCol || 0, imgCol = opt.imgCol == null ? 1 : opt.imgCol;
+  const regs = (data && data.regions) || {};
+  // cột khu vực nào có dữ liệu CSV
+  const cols = [];
+  for (let i = from; i <= to && i < headers.length; i++) {
+    const h = String(headers[i] || '').replace(/[̵̶]/g, '').trim().toLowerCase();
+    const r = Object.keys(regs).find(k => k.toLowerCase() === h);
+    if (r) cols.push({ i, r });
+  }
+  if (!cols.length) return { filled: 0, unresolved: 0 };
+  // chỉ mục tên -> mã cho từng khu vực
+  const idx = {};
+  for (const { r } of cols) {
+    const m = idx[r] = new Map();
+    const al = (data.alias && data.alias[r]) || {};
+    for (const [k, names] of Object.entries(regs[r]))
+      for (const n of names.concat(al[k] || [])) { const z = AUTO_NORM(n); if (!z) continue; if (!m.has(z)) m.set(z, new Set()); m.get(z).add(k) }
+  }
+  const cover = k => cols.reduce((s, { r }) => s + (regs[r][k] ? 1 : 0), 0);
+  const val = (row, i) => String(row[i] == null ? '' : row[i]).replace(/[̵̶]/g, '').trim();
+
+  // 1) tìm mã cho từng dòng
+  const info = rows.map(row => {
+    const score = new Map(), add = (k, w) => score.set(k, (score.get(k) || 0) + w);
+    const blocked = new Set();
+    for (const { i, r } of cols) {
+      const v = val(row, i);
+      if (!v) continue;
+      if (AUTO_BLANK.test(v)) { blocked.add(i); continue }
+      const hit = idx[r].get(AUTO_NORM(v.replace(/\(?\b(removed|closed)\b\)?/gi, '')));
+      if (hit) hit.forEach(k => add(k, 1));
+    }
+    const a = AUTO_NORM(row[nameCol]);
+    if (a) { const ks = new Set(); for (const { r } of cols) { const h = idx[r].get(a); if (h) h.forEach(k => ks.add(k)) } ks.forEach(k => add(k, 0.5)) }
+    const keys = [...score.entries()].sort((x, y) => y[1] - x[1] || cover(y[0]) - cover(x[0]) || (+x[0]) - (+y[0])).map(x => x[0]);
+    const best = keys.length ? score.get(keys[0]) : 0;
+    return { keys: keys.filter(k => score.get(k) === best), all: keys, blocked };
+  });
+
+  // 2) nhóm các dòng là cùng 1 vũ khí: cùng mã, hoặc tên hình chỉ khác đuôi _NM (bản Trung Quốc / bản quốc tế)
+  const par = rows.map((_, n) => n), find = n => par[n] === n ? n : (par[n] = find(par[n]));
+  const join = (a, b) => { a = find(a); b = find(b); if (a !== b) par[b] = a };
+  const seenK = new Map(), seenI = new Map();
+  info.forEach((x, n) => {
+    if (x.keys.length) { const g = x.keys[0]; seenK.has(g) ? join(seenK.get(g), n) : seenK.set(g, n) }
+    const im = String(rows[n][imgCol] || '').split(/[,;\n|]+/)[0].trim().toLowerCase().replace(/_nm$/, '');
+    if (im) seenI.has(im) ? join(seenI.get(im), n) : seenI.set(im, n);
+  });
+  const groups = new Map();
+  rows.forEach((_, n) => { const g = find(n); if (!groups.has(g)) groups.set(g, []); groups.get(g).push(n) });
+
+  let filled = 0, unresolved = 0;
+  rows.forEach((row, n) => {
+    const x = info[n];
+    for (const i of x.blocked) row[i] = '';
+    if (!x.keys.length) { unresolved++; return }
+    const grp = groups.get(find(n));
+    for (const { i, r } of cols) {
+      if (val(row, i) || x.blocked.has(i)) continue;
+      if (grp.length > 1) {
+        if (grp.some(m => m !== n && (val(rows[m], i) || info[m].blocked.has(i)))) continue;   // dòng anh em đã có tên khu vực này
+        const isNM = m => /_nm(\b|_|$)/i.test(String(rows[m][imgCol] || ''));
+        const pref = grp.filter(m => r === 'China' ? !isNM(m) : isNM(m));
+        if ((pref.length ? pref[0] : grp[0]) !== n) continue;
+      }
+      const k = x.keys.find(k => regs[r][k]) || x.all.find(k => regs[r][k]);
+      if (!k) continue;
+      row[i] = regs[r][k][0];
+      (row.auto || (row.auto = new Set())).add(i);
+      filled++;
+    }
+  });
+  return { filled, unresolved };
+}
+
+let AUTO_DATA=null;
+const AUTO_P=CFG.AUTO_REGIONS?fetch(CFG.AUTO_REGIONS,{cache:'no-cache'}).then(r=>r.ok?r.json():null).then(d=>AUTO_DATA=d).catch(()=>null):Promise.resolve(null);
+async function applyAuto(headers,rows){
+  await AUTO_P;
+  if(!AUTO_DATA)return;
+  try{
+    const st=autoFillRegions(headers,rows,AUTO_DATA,{from:CFG.COL.regionFrom,to:CFG.COL.regionTo,nameCol:CFG.COL.name,imgCol:CFG.COL.image});
+    console.log('[ITEMCFT] tự điền',st.filled,'ô; không nhận diện được',st.unresolved,'dòng; dữ liệu build lúc',AUTO_DATA.built);
+  }catch(e){console.warn('[ITEMCFT] lỗi tự điền:',e)}
+}
+const AUTO_SHOW=CFG.AUTO_MARK||/[?&]auto\b/.test(location.search);
 
 /* ================= KHỞI CHẠY (mỗi lần F5 tải lại Sheet) ================= */
 $('btnSearch').onclick=()=>{state.page=1;render()};
@@ -1120,11 +1223,12 @@ function dataJsFallback(){
     }
     const seen=new Set();                               // bỏ dòng trùng hệt nhau (phòng khi 1 tab bị đọc 2 lần)
     const allRows=ok.flatMap(x=>x.rows).filter(r=>{const k=r.join('\u0001');if(seen.has(k))return false;seen.add(k);return true});
+    await applyAuto(ok[0].headers,allRows);
     build(ok[0].headers,allRows);                       // gộp mọi tab, tiêu đề lấy từ tab đầu tiên
     $('ver').textContent=((bad.length?'KHÔNG đọc được tab: '+bad.join(', '):'')+stNote).replace(/^ · /,'');   // dòng thông tin thường đã ẩn; chỉ hiện khi có cảnh báo
   }catch(err){
     const fb=dataJsFallback();
-    if(fb){build(fb.headers,fb.rows);$('ver').textContent='Đang dùng dữ liệu dự phòng từ data.js ('+err.message+')'}
+    if(fb){await applyAuto(fb.headers,fb.rows);build(fb.headers,fb.rows);$('ver').textContent='Đang dùng dữ liệu dự phòng từ data.js ('+err.message+')'}
     else{$('ver').textContent='';$('msg').textContent=err.message;$('msg').className='err';return}
   }
   F.region=-1;buildFilters();render();

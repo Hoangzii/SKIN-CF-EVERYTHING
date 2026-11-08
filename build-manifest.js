@@ -24,3 +24,6 @@ for (const pg of PAGES) {
   fs.writeFileSync(path.join(base, 'manifest.json'), JSON.stringify(out));
   console.log(pg + ': ' + Object.keys(out).length + ' file');
 }
+
+// Tạo weapon/regions.json (tên vũ khí theo khu vực) từ thư mục "ITEMCFT WORLD"
+try { require('./build-regions.js'); } catch (e) { console.log('build-regions lỗi: ' + e.message); }
