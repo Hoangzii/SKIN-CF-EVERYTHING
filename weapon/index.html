@@ -132,6 +132,7 @@ label.chk{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
 
 <!-- data.js: giữ nguyên, không chỉnh sửa. Nếu file có khai báo SHEET_ID / SHEET_GID thì sẽ được dùng; nếu có mảng dữ liệu thì dùng làm dự phòng khi không tải được Sheet. -->
 <script src="data.js" onerror="void 0"></script>
+<script src="regions.js" onerror="void 0"></script>
 <script>
 /* ================= CẤU HÌNH ================= */
 const CFG = {
@@ -1120,24 +1121,28 @@ function autoFillRegions(headers, rows, data, opt) {
       if (!v) continue;
       if (AUTO_BLANK.test(v)) { blocked.add(i); continue }
       const hit = idx[r].get(AUTO_NORM(v.replace(/\(?\b(removed|closed)\b\)?/gi, '')));
-      if (hit) hit.forEach(k => add(k, 1));
+      if (hit) hit.forEach(k => add(k, 3));   // tên đã ghi trong Sheet: tín hiệu mạnh nhất
     }
+    // tên hình cột B (bỏ BUYWEAPON_INFO_) thường trùng tên nội bộ _NAME trong CSV (yếu hơn cột A vì 1 hình có thể dùng chung nhiều dòng)
+    String(row[imgCol] || '').split(/[,;\n|]+/).map(t => t.trim().replace(/^.*?BUYWEAPON_INFO_/i, '')).filter(Boolean).forEach(im => {
+      const ks = new Set();
+      for (const z of [im, im.replace(/_(NM|RU|VN|BR|PH|WE|VNWE|CN|TW|JP|KR|ID|EU|ES|GC|SC|GL)$/i, '')]) for (const { r } of cols) { const h = idx[r].get(AUTO_NORM(z)); if (h) h.forEach(k => ks.add(k)) }
+      ks.forEach(k => add(k, 1));
+    });
     const a = AUTO_NORM(row[nameCol]);
-    if (a) { const ks = new Set(); for (const { r } of cols) { const h = idx[r].get(a); if (h) h.forEach(k => ks.add(k)) } ks.forEach(k => add(k, 0.5)) }
+    if (a) { const ks = new Set(); for (const { r } of cols) { const h = idx[r].get(a); if (h) h.forEach(k => ks.add(k)) } ks.forEach(k => add(k, 2)) }   // tên cột A
     const keys = [...score.entries()].sort((x, y) => y[1] - x[1] || cover(y[0]) - cover(x[0]) || (+x[0]) - (+y[0])).map(x => x[0]);
     const best = keys.length ? score.get(keys[0]) : 0;
     return { keys: keys.filter(k => score.get(k) === best), all: keys, blocked };
   });
 
-  // 2) nhóm các dòng là cùng 1 vũ khí: cùng mã, hoặc tên hình chỉ khác đuôi _NM (bản Trung Quốc / bản quốc tế)
+  // 2) nhóm cặp dòng bản thường / bản _NM (tên hình chỉ khác đuôi _NM)
   const par = rows.map((_, n) => n), find = n => par[n] === n ? n : (par[n] = find(par[n]));
   const join = (a, b) => { a = find(a); b = find(b); if (a !== b) par[b] = a };
-  const seenK = new Map(), seenI = new Map();
-  info.forEach((x, n) => {
-    if (x.keys.length) { const g = x.keys[0]; seenK.has(g) ? join(seenK.get(g), n) : seenK.set(g, n) }
-    const im = String(rows[n][imgCol] || '').split(/[,;\n|]+/)[0].trim().toLowerCase().replace(/_nm$/, '');
-    if (im) seenI.has(im) ? join(seenI.get(im), n) : seenI.set(im, n);
-  });
+  const img0 = n => String(rows[n][imgCol] || '').split(/[,;\n|]+/)[0].trim().toLowerCase();
+  const base = new Map();
+  rows.forEach((_, n) => { const im = img0(n); if (im && !/_nm$/.test(im)) base.set(im, n) });
+  rows.forEach((_, n) => { const im = img0(n); if (/_nm$/.test(im) && base.has(im.replace(/_nm$/, ''))) join(base.get(im.replace(/_nm$/, '')), n) });
   const groups = new Map();
   rows.forEach((_, n) => { const g = find(n); if (!groups.has(g)) groups.set(g, []); groups.get(g).push(n) });
 
@@ -1166,7 +1171,7 @@ function autoFillRegions(headers, rows, data, opt) {
 }
 
 let AUTO_DATA=null;
-const AUTO_P=CFG.AUTO_REGIONS?fetch(CFG.AUTO_REGIONS,{cache:'no-cache'}).then(r=>r.ok?r.json():null).then(d=>AUTO_DATA=d).catch(()=>null):Promise.resolve(null);
+const AUTO_P=window.REGIONS_DATA?Promise.resolve(AUTO_DATA=window.REGIONS_DATA):CFG.AUTO_REGIONS?fetch(CFG.AUTO_REGIONS,{cache:'no-cache'}).then(r=>r.ok?r.json():null).then(d=>AUTO_DATA=d).catch(()=>null):Promise.resolve(null);
 async function applyAuto(headers,rows){
   await AUTO_P;
   if(!AUTO_DATA)return;

@@ -82,4 +82,6 @@ if (fs.existsSync(SRC_DIR)) {
     } catch (e) { console.log('Lỗi ' + f + ': ' + e.message) }
   }
 } else console.log('Không thấy thư mục ITEMCFT WORLD');
-if (fs.existsSync(path.dirname(OUT))) fs.writeFileSync(OUT, JSON.stringify(res));
+// Không có file CSV nào (vd thư mục chưa được đẩy lên GitHub) => giữ nguyên regions.json cũ, không ghi đè bằng dữ liệu rỗng
+if (!Object.keys(res.regions).length) console.log('Không có dữ liệu khu vực mới, giữ nguyên weapon/regions.json');
+else if (fs.existsSync(path.dirname(OUT))) fs.writeFileSync(OUT, JSON.stringify(res));
