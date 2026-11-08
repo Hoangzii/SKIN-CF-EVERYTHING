@@ -173,6 +173,7 @@ const CONFIG = {
   // Chữ trên nút biến thể = COPY NGUYÊN từ CFG.VARIANT_RULES của weapon/index.html (khi trang Weapon đổi luật thì dán lại đoạn này).
   // Luật có merge:true: các DÒNG khác nhau trong Sheet (mã chỉ khác nhau ở đoạn tên) được gộp thành 1 thẻ có nhiều nút, như trang Weapon.
   VARIANT_RULES: [
+    { tokens:['DualUZI-Gold','DualUZI-Gold_2'], labels:['World','Vietnam'] },
     { tokens:['RifleBeast','KnifeBeast'], labels:['Default','Change Mode'] },
     { tokens:['BaiHu_VN26_NM','BaiHu_VN26'], labels:['Original','Virtus.Pro'] },
     { tokens:['Dominator_VN26_nm','Dominator_VN26'], labels:['Original','Twisted Minds'] },
@@ -346,8 +347,18 @@ function badgesTag(list, cls){
 
 /* ---------------- nhãn nút biến thể (luật của trang Weapon) ---------------- */
 const baseOf = c => { let n = String(c || '').split(/[\\/]/).pop().trim().replace(/\.(png|jpg|jpeg|webp)$/i, ''); if (!n.toUpperCase().startsWith(CONFIG.IMG_PREFIX)) n = CONFIG.IMG_PREFIX + '_' + n; return n; };
-function variantLabels(codes){
+function tmpLabels(name, bases){   // Steyr TMP 3-4 mã: Normal, Dual, Mutation[, Charged] (mã thứ 3 là AWM/Charge => Charged)
+  if(/\bp90\b/i.test(name||'')){   // P90-Frenzy (2 mã): PVP, PVE | P90-Wild Shot (4 mã): PVP, PVP Dual, PVE, PVE Charged
+    if(/frenzy/i.test(name)&&bases.length===2)return ['PVP','PVE'];
+    if(/wild\s*shot/i.test(name)&&bases.length===4)return ['PVP','PVP Dual','PVE','PVE Charged'];
+  }
+  if (!/\btmp\b/i.test(name || '') || bases.length < 3 || bases.length > 4) return null;
+  if (bases.length === 4) return ['Normal', 'Dual', 'Mutation', 'Charged'];
+  return ['Normal', 'Dual', /AWM|Charge/i.test(bases[2]) ? 'Charged' : 'Mutation'];
+}
+function variantLabels(codes, name){
   const bases = codes.map(baseOf);
+  const tl = tmpLabels(name, bases); if (tl) return tl;
   const has = (ru, b) => ru.tokens.some(t => t && b.includes(t));
   const rule = CONFIG.VARIANT_RULES.find(ru => bases.some(b => has(ru, b)));
   return bases.map((b, k) => {
@@ -438,7 +449,7 @@ function toVars(m){
     m.vi = Math.max(0, ms.findIndex(x => normCode(x.w.codes[0]) === mk));
   } else {
     const codes = m.codes && m.codes.length ? m.codes : (m.code ? [m.code] : []);
-    const labels = codes.length > 1 ? variantLabels(codes) : [''];
+    const labels = codes.length > 1 ? variantLabels(codes, w.name) : [''];
     m.vars = codes.length ? codes.map((c, k) => ({w, code: c, label: labels[k]})) : [{w, code: null, label: ''}];
     m.vi = Math.max(0, codes.findIndex(c => normCode(c) === mk));
   }

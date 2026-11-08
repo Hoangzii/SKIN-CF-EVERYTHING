@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#f5f5f5;--card:#fff;--tx:#111;--sub:#555;--line:#d9d9d9;--accent:#1677ff;--label:#99ccff;--label-tx:#111}
+:root{--bg:#f5f5f5;--card:#fff;--tx:#111;--sub:#555;--line:#d9d9d9;--accent:#1677ff;--label:#99ccff;--label-tx:#111;--scope-bg:#000}
 @media(prefers-color-scheme:dark){:root{--bg:#141414;--card:#1f1f1f;--tx:#eee;--sub:#aaa;--line:#3a3a3a;--label:#2b4a73;--label-tx:#fff}}
 *{box-sizing:border-box}
 body{margin:0;font-family:'Lexend',system-ui,sans-serif;background:var(--bg);color:var(--tx);padding:20px 16px 40px}
@@ -37,7 +37,7 @@ label.chk{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
 .grid{--gap:14px;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:var(--gap);max-width:1600px;margin:18px auto}
 .item{background:var(--card);border-top:3px solid var(--label);border-radius:2px;padding:10px 8px 0;display:flex;flex-direction:column;align-items:center;min-height:124px;position:relative;box-shadow:0 1px 3px rgba(0,0,0,.08);transition:transform .12s,box-shadow .12s}
 .item:hover{transform:translateY(-2px);box-shadow:0 4px 10px rgba(0,0,0,.18);border-top-color:var(--accent)}
-.item .pic{height:100px;width:100%;display:flex;align-items:center;justify-content:center}
+.item .pic{position:relative;height:100px;width:100%;display:flex;align-items:center;justify-content:center}
 .item img.w{max-width:100%;max-height:100px;object-fit:contain}
 .item .noimg{font-size:11px;color:var(--sub)}
 .tgl{display:none;flex-wrap:nowrap;gap:3px;justify-content:center;margin:0;padding:6px 6px 0;width:100%}
@@ -92,6 +92,18 @@ label.chk{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
 #pop .pyl{width:0;min-width:100%;box-sizing:border-box;background:#000;color:#fbdf89;padding:12px 22px;font-size:14px;line-height:1.7;text-align:left;word-break:break-all}
 #pop .pyl .lb{color:#fff}
 .item{cursor:pointer}
+/* ---- Nút SCOPE (giống trang /skin/) ---- */
+.scopebtn{position:absolute;right:-2px;bottom:6px;z-index:2;font-size:10px;line-height:1;padding:4px 9px;border:1px solid #8fa0cf;border-radius:3px;background:#2c3e75;color:#fff;font-weight:600;letter-spacing:.4px}
+.scopebtn:hover{background:#3b52a0}
+/* ---- Xem nhanh SCOPE khi rê chuột + cửa sổ phóng to khi bấm ---- */
+#sp{position:fixed;z-index:60;pointer-events:none;display:none;width:240px;height:180px;background:var(--scope-bg);border:1px solid #555;box-shadow:0 6px 18px rgba(0,0,0,.45)}
+#sp img{width:100%;height:100%;object-fit:contain;display:block}
+#sp .noimg,#modal .noimg{color:#ccc;padding:14px;font-size:12px}
+#modal{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.65);display:none;align-items:center;justify-content:center}
+#modal.on{display:flex}
+#modal .box{position:relative;width:min(800px,92vw,calc(80vh*4/3));aspect-ratio:4/3;background:var(--scope-bg)}
+#modal .box img{width:100%;height:100%;object-fit:contain;display:block}
+#modal .x{position:absolute;top:-38px;right:-2px;color:#fff;font:700 26px/1 'Lexend',sans-serif;cursor:pointer;user-select:none}
 #msg{text-align:center;color:var(--sub);padding:30px;font-size:14px}
 #msg.err{color:#d4380d}
 #msg:empty,.ver:empty{display:none}   /* ẩn khoảng trống khi không có thông báo */
@@ -115,6 +127,8 @@ label.chk{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
 <div id="tip"></div>
 <div id="pop"><div class="pbox"><div class="phd" id="ptitle"></div><span class="px" id="pclose">&times;</span><div class="pbd"><div class="pleft"><div class="ppic" id="ppic"></div><div class="tgl" id="ptgl"></div></div><div class="preg" id="preg"></div></div><div class="pyl" id="pyl"></div></div></div>
 <div class="cbl" id="cbl"></div>
+<div id="sp"></div>
+<div id="modal"><div class="box"><div id="mimg"></div><span class="x" id="mx">X</span></div></div>
 
 <!-- data.js: giữ nguyên, không chỉnh sửa. Nếu file có khai báo SHEET_ID / SHEET_GID thì sẽ được dùng; nếu có mảng dữ liệu thì dùng làm dự phòng khi không tải được Sheet. -->
 <script src="data.js" onerror="void 0"></script>
@@ -123,21 +137,28 @@ label.chk{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
 const CFG = {
   SHEET_ID : (typeof SHEET_ID  !== 'undefined' && SHEET_ID)  || '1GVgZrCybnuEdGPtVE33NMCmwRWSqfgLHIuz2XAXxhoc',
   GID      : (typeof SHEET_GID !== 'undefined' && SHEET_GID) || '2098056846',
-  // Danh sách các tab (sheet) trong file Google Sheets sẽ được đọc và GỘP lại thành một. Mỗi tab phải có dòng 1 là tiêu đề, cột A–V giống nhau.
+  // Danh sách các tab (sheet) trong file Google Sheets sẽ được đọc và GỘP lại thành một. Mỗi tab phải có dòng 1 là tiêu đề, cột A–W giống nhau.
   // Mỗi phần tử là gid (dãy số trên URL sau #gid=) hoặc tên tab (ví dụ 'SNIPER'). Thêm tab mới chỉ cần thêm một dòng vào đây.
   // Cách 1 (khuyên dùng): tạo 1 tab tên "TABS" trong Sheet, cột A liệt kê tên các tab (mỗi tab 1 dòng, bắt đầu từ dòng 1, không có tiêu đề;
   // đặt dấu # đầu dòng để tạm tắt). Thêm tab mới chỉ cần thêm 1 dòng ở tab TABS, KHÔNG phải sửa file này.
   TAB_LIST: 'TABS',
   // Cách 2 (dự phòng nếu chưa có tab TABS): liệt kê tên tab hoặc gid ở đây.
-  SHEETS: ['2098056846' , '953162863' , '1009811895' /* RIFLE */ /*, 'SNIPER', 'SMG', 'SHOTGUN', 'MG' */],
+  SHEETS: ['2098056846' , '953162863' , '1009811895' , '1975501148' /* RIFLE */ /*, 'SNIPER', 'SMG', 'SHOTGUN', 'MG' */],
   IMG_DIR  : 'img/',
+  // ---- SCOPE ----
+  // Hình scope: tìm trong weapon/img/SCOPE/ trước; không có thì tìm tiếp thư mục SCOPE của trang /skin/ (xoá dòng thứ 2 nếu chỉ muốn dùng weapon/img/SCOPE).
+  // Ô cột F (SCOPE) ghi tên file scope, vd AWM_RedFrameHawk_Scope. Ô trống => tra SCOPE_DATA bên dưới theo mã cột B (IMAGE). Không có => không hiện nút SCOPE.
+  SCOPE_DIRS: ['img/SCOPE/',
+               '../skin/img/SCOPE/'],
+  SCOPE_EXTS: ['.png','.webp','.jpg','.PNG'],
   // Hình có thể nằm trong thư mục con của Img/ (vd Img/RIFLE/, Img/SNIPER/). Trang tự thử: thư mục trùng với cột TYPE (C) / CATEGORIZED (D)
   // của dòng đó trước, rồi thư mục gốc Img/, rồi các thư mục trong danh sách dưới đây. Thêm tên thư mục mới vào đây nếu cần.
   IMG_SUBDIRS: ['RIFLE','SNIPER','SMG','SHOTGUN','MG','PISTOL','MELEE','GRENADE','FLASHBANG','SMOKE'],
   BADGE_DIR: 'img/badges/',
   IMG_PREFIX: 'BUYWEAPON_INFO',
   // Chỉ số cột (A=0). Đổi tại đây nếu sheet đổi cấu trúc.
-  COL: { name:0, image:1, c:2, d:3, e:4, f:5, g:6, h:7, badges:8, regionFrom:9, regionTo:21 },
+  // Cột F = SCOPE (chèn sau WEAPON LIST) => CLASS/CLASS/SPECIAL/BADGES/khu vực lùi 1 cột: G,H,I,J, K–W
+  COL: { name:0, image:1, c:2, d:3, e:4, scope:5, f:6, g:7, h:8, badges:9, regionFrom:10, regionTo:22 },
   // Nút đổi hình: lấy từ chính ô cột B. Ô có 1 tên => không có nút. Ô có 2+ tên (cách nhau bằng dấu , ; hoặc xuống dòng) => mỗi tên là 1 nút,
   // tất cả nằm chung thư mục Img/. Chữ trên nút: tìm luật trong VARIANT_RULES có đoạn tên (tokens) nằm trong tên file, nếu không thì dùng DEFAULT_LABELS theo thứ tự.
   // Gộp các dòng riêng thành 1 thẻ: tokens là đoạn tên file khác nhau giữa các biến thể ('' = bản gốc, không có đoạn đó).
@@ -146,6 +167,7 @@ const CFG = {
   DEFAULT_LABELS: ['Normal','Change'],
   // Luật có merge:true sẽ GỘP nhiều dòng của Sheet thành 1 khung: các file chỉ khác nhau ở token (hoặc không có token = nút đầu/mặc định).
   VARIANT_RULES: [
+    { tokens:['DualUZI-Gold','DualUZI-Gold_2'], labels:['World','Vietnam'] },
     { tokens:['RifleBeast','KnifeBeast'], labels:['Default','Change Mode'] },
     { tokens:['BaiHu_VN26_NM','BaiHu_VN26'], labels:['Original','Virtus.Pro'] },
     { tokens:['Dominator_VN26_nm','Dominator_VN26'], labels:['Original','Twisted Minds'] },
@@ -172,7 +194,7 @@ const CFG = {
     // { tokens:['_A','_B','_C'],         labels:['Một','Hai','Ba'] },     // 3 nút
   ],
   CLOSED_REGIONS: ['Russia','Indonesia','Korea','South Korea','Español','Europe','SEA','Japan','Taiwan'],   // khu vực đã ngừng hoạt động: mọi dữ liệu của cột này bị gạch ngang + xám. Hoặc ghi "Russia (Removed)" ngay tiêu đề cột trong Sheet.
-  CLOSED_FROM: 14,   // chỉ tiêu đề cột O (=14) trở đi (O–V) mà bị gạch ngang trong Sheet mới tính là khu vực đóng "(Closed)"
+  CLOSED_FROM: 15,   // chỉ tiêu đề cột P (=15) trở đi (P–W) mà bị gạch ngang trong Sheet mới tính là khu vực đóng "(Closed)"
   REMOVED_WORDS: ['Removed','Closed'],   // từ đánh dấu ngừng hoạt động trong ô khu vực (thêm từ khác nếu cần, vd 'Đã gỡ')
   POPUP_REGIONS: ['China','Vietnam','Brazil','West','Philippines'],   // 5 dòng khu vực trong popup (đúng tên cột khu vực trong Sheet)
   HOVER_TIP: false,   // true = bật lại tooltip khu vực khi rê chuột vào thẻ
@@ -196,6 +218,153 @@ const CFG = {
   // Để trống '' thì web chỉ nhận chữ gạch ngang kiểu Unicode (R̶u̶s̶s̶i̶a̶) và chữ "Removed". Xem hướng dẫn tạo khoá trong tin nhắn.
   API_KEY: ''
 };
+
+/* ================= DỮ LIỆU SCOPE (đối chiếu weapon/img/SCOPE, bổ sung từ trang /skin/) =================
+   mã cột B (bỏ BUYWEAPON_INFO_) -> tên file scope. Ô SCOPE (cột F) trong Sheet có giá trị thì ưu tiên ô đó. */
+const SCOPE_DATA = {
+  "G36C_Specular": "G36C_Specular_Scope",
+  "G36C_Specular_GC": "G36C_Specular_GC_Scope",
+  "G36C_Specular_GTHV_NM": "G36C_Specular_GTHV_Scope",
+  "G36C_Specular_SC": "G36C_Specular_SC_Scope",
+  "G36": "G36_Scope",
+  "M14EBR_S_HyperTech": "M14EBR_S_HyperTech_Scope",
+  "ScarLight_Scope_Elite_Orca": "ScarLight_Scope_Elite_Orca_Scope",
+  "AWM_ClassicBeast": "AWM_ClassicBeast_Scope",
+  "AWM-Infernal_Dragon": "AWM-Infernal_Dragon_Scope",
+  "AWM_A_InfernalDragon_CFS17": "AWM_A_InfernalDragon_CFS17_Scope",
+  "AWM_A_InfernalDragon_Prime": "AWM_A_InfernalDragon_Prime_Scope",
+  "AWM_RedFrameHawk": "AWM_RedFrameHawk_Scope",
+  "AWM_RedFrameHawk_ADNL": "AWM_RedFrameHawk_ADNL_Scope",
+  "AWM_RedFrameHawk_Flowing": "AWM_RedFrameHawk_Flowing_Scope",
+  "AWM_RedFrameHawk_Foliage": "AWM_RedFrameHawk_Foliage_Scope",
+  "AWM_RedFrameHawk_HLW26": "AWM_RedFrameHawk_HLW26_Scope",
+  "AWM_RedFrameHawk_Ink": "AWM_RedFrameHawk_Ink_Scope",
+  "AWM_RedFrameHawk_Jewelry": "AWM_RedFrameHawk_Jewelry_Scope",
+  "AWM_RedFrameHawk_LuDou": "AWM_RedFrameHawk_LuDou_Scope",
+  "AWM_RedFrameHawk_LuDou_NM": "AWM_RedFrameHawk_LuDou_Scope",
+  "AWM_RedFrameHawk_NT": "AWM_RedFrameHawk_NT_Scope",
+  "AWM_RedFrameHawk_NL": "AWM_RedFrameHawk_NL_Scope",
+  "AWM_RedFrameHawk_Phoenix2": "AWM_RedFrameHawk_Phoenix2_Scope",
+  "AWM_RedFrameHawk_NoMark": "AWM_RedFrameHawk_Scope",
+  "AWM_RedFrameHawk_Space": "AWM_RedFrameHawk_Space_Scope",
+  "AWM_RedFrameHawk_TCG_NM": "AWM_RedFrameHawk_TCG_NM_Scope",
+  "AWM_RedFrameHawk_LLDQ": "AWM_RedFrameHawk_LLDQ_Scope",
+  "AWM_RedFrameHawk_TV": "AWM_RedFrameHawk_TV_Scope",
+  "AWM_RedFrameHawk_CNCF": "AWM_RedFrameHawk_CNCF_NM_Scope",
+  "Wukong_AWM_RedFrameHawk": "Wukong_AWM_RedFrameHawk_Scope",
+  "Wukong_AWM_RedFrameHawk_BL": "Wukong_AWM_RedFrameHawk_Scope",
+  "Wukong_AWM_RedFrameHawk_BR": "Wukong_AWM_RedFrameHawk_Scope",
+  "Wukong_AWM_RedFrameHawk_OR": "Wukong_AWM_RedFrameHawk_Scope",
+  "Wukong_AWM_RedFrameHawk_KING": "Wukong_AWM_RedFrameHawk_Scope",
+  "Wukong_AWM_RedFrameHawk_OR2": "Wukong_AWM_RedFrameHawk_Scope",
+  "Wukong_AWM_RedFrameHawk_PR": "Wukong_AWM_RedFrameHawk_Scope",
+  "Wukong_AWM_RedFrameHawk_RE": "Wukong_AWM_RedFrameHawk_Scope",
+  "Wukong_AWM_RedFrameHawk_WH": "Wukong_AWM_RedFrameHawk_Scope",
+  "M82A1_S_Born_Beast": "M82A1_S_BornBeast_Scope",
+  "M82A1_S_BornBeast_BlackHole": "M82A1_S_BornBeast_BlackHole_Scope",
+  "M82A1_S_BornBeast_BlackMamba": "M82A1_S_BornBeast_BlackMamba_Scope",
+  "M82A1_S_BornBeast_BlackRunes": "M82A1_S_BornBeast_BlackRunes_Scope",
+  "M82A1_S_BornBeast_BlackDS": "M82A1_S_BornBeast_BlackDS_Scope",
+  "M82A1_S_BornBeast_HuluXD": "M82A1_S_BornBeast_HuluXD_Scope",
+  "M82A1_S_BornBeast_HuluXD_NM": "M82A1_S_BornBeast_HuluXD_Scope",
+  "M82A1_S_BornBeast_Carrack": "M82A1_S_BornBeast_Carrack_Scope",
+  "M82A1_S_BornBeast_CFS18_NM": "M82A1_S_BornBeast_CFS18_NM_Scope",
+  "M82A1_S_BornBeast_CFPL_AG_NM": "M82A1_S_BornBeast_CFPL_AG_NM_Scope",
+  "M82A1_S_BornBeast_CFSTAR18": "M82A1_S_BornBeast_CFSTAR18_Scope",
+  "M82A1_S_BornBeast_CFS20": "M82A1_S_BornBeast_CFS20_Scope",
+  "M82A1_S_BornBeast_Champion": "M82A1_S_BornBeast_Champion_Scope",
+  "M82A1_S_BornBeast_Douyu_NM": "M82A1_S_BornBeast_Douyu_Scope",
+  "M82A1_S_BornBeast_DYZYW": "M82A1_S_BornBeast_DYZYW_Scope",
+  "M82A1_S_BornBeast_GunNiang": "M82A1_S_BornBeast_GunNiang_Scope",
+  "M82A1_S_BornBeast_Kite_NM": "M82A1_S_BornBeast_Kite_NM_Scope",
+  "M82A1_S_BornBeast_LiveCF": "M82A1_S_BornBeast_LiveCF_Scope",
+  "M82A1_S_BornBeast_MVP20_NM": "M82A1_S_BornBeast_MVP20_Scope",
+  "M82A1_S_BornBeast_Orchid": "M82A1_S_BornBeast_Orchid_Scope",
+  "M82A1_S_BornBeast_Prime": "M82A1_S_BornBeast_Prime_Scope",
+  "M82A1_BornBeast_Punk": "M82A1_BornBeast_Punk_Scope",
+  "M82A1_S_BornBeast_PFuXi": "M82A1_S_BornBeast_PFuXi_Scope",
+  "M82A1_S_BornBeast_QQMBS_NM": "M82A1_S_BornBeast_QQMBS_NM_Scope",
+  "M82A1_S_BornBeast_SS": "M82A1_S_BornBeast_SS_Scope",
+  "M82A1_S_BornBeast_Stellar": "M82A1_S_BornBeast_Stellar_Scope",
+  "M82A1_S_BornBeast_TA": "M82A1_S_BornBeast_TA_Scope",
+  "M82A1_S_BornBeast_Winter": "M82A1_S_BornBeast_Winter_Scope",
+  "M82A1_S_BornBeast_Dongmie": "M82A1_S_BornBeast_Dongmie_Scope",
+  "M82A1-IronShark": "M82A1-IronShark_Scope",
+  "M82A1_IronShark_CFAPP_ORG": "M82A1_IronShark_CFAPP_ORG_Scope",
+  "M82A1-IronShark_Ipdance": "M82A1-IronShark_Ipdance_Scope",
+  "M82A1_IronShark_NoMark": "M82A1-IronShark_Scope",
+  "M82A1_IronShark_Prime": "M82A1_IronShark_Prime_Scope",
+  "M82A1_Jewelry": "M82A1_Jewelry_Scope",
+  "M82A1_Jewelry_12CZS": "M82A1_Jewelry_12CZS_Scope",
+  "M82A1_Jewelry_BlackLotus": "M82A1_Jewelry_BlackLotus_Scope",
+  "M82A1_Jewelry_FanService": "M82A1_Jewelry_FanService_Scope",
+  "M82A1_IronShark_ZhuQue": "M82A1_IronShark_ZhuQue_Scope",
+  "M82A1_IronShark_ZhuQue_NM": "M82A1_IronShark_ZhuQue_Scope",
+  "M82A1_IronShark_ZhuQue_Wns": "M82A1_IronShark_ZhuQue_Wns_Scope",
+  "M200CheyTac": "M200CheyTac_Scope",
+  "M200Cheytac_Dominator": "M200Cheytac_Dominator_Scope",
+  "M200Cheytac_Dominator_22WC_NM": "M200Cheytac_Dominator_22WC_NM_Scope",
+  "M200Cheytac_Dominator_23WC_NM": "M200Cheytac_Dominator_23WC_NM_Scope",
+  "M200Cheytac_Dominator_C_AG_NM": "M200Cheytac_Dominator_C_AG_NM_Scope",
+  "M200Cheytac_Dominator_Ast20_NM": "M200Cheytac_Dominator_Ast20_NM_Scope",
+  "M200CheyTac_Dominator_BList": "M200Cheytac_Dominator_BList_Scope",
+  "M200Cheytac_Dominator_Caocao_NM": "M200Cheytac_Dominator_Caocao_Scope",
+  "M200Cheytac_Dominator_CAS_NM": "M200Cheytac_Dominator_CAS_NM_Scope",
+  "M200Cheytac_Dominator_CFS22_NM": "M200Cheytac_Dominator_CFS22_NM_Scope",
+  "M200Cheytac_Dominator_CP_NM": "M200Cheytac_Dominator_CP_Scope",
+  "M200Cheytac_Dominator_XL_NM": "M200Cheytac_Dominator_XL_NM_Scope",
+  "M200Cheytac_Dominator_FL": "M200Cheytac_Dominator_FL_Scope",
+  "M200CheyTac_Dominator_GRisk": "M200Cheytac_Dominator_GRisk_Scope",
+  "M200CheyTac_Dominator_HZ": "M200Cheytac_Dominator_HZ_Scope",
+  "M200CheyTac_Dominator_MVP21_NM": "M200Cheytac_Dominator_MVP21_NM_Scope",
+  "M200Cheytac_Dominator_Prismatic": "M200Cheytac_Dominator_Prismatic_Scope",
+  "M200Cheytac_Dominator_SS": "M200Cheytac_Dominator_SS_Scope",
+  "M200Cheytac_Dominator_Str": "M200Cheytac_Dominator_Str_Scope",
+  "M200Cheytac_Dominator_SDSB": "M200Cheytac_Dominator_SDSB_Scope",
+  "M200Cheytac_Dominator_TCG_NM": "M200Cheytac_Dominator_TCG_NM_Scope",
+  "M200Cheytac_Dominator_VN26_nm": "M200Cheytac_Dominator_VN26_Scope",
+  "M200Cheytac_Dominator_VN26": "M200Cheytac_Dominator_VN26_Scope",
+  "M200Cheytac_Dominator_YOD": "M200Cheytac_Dominator_YOD_Scope",
+  "M200Cheytac_Dominator_ZhouYu": "M200Cheytac_Dominator_ZhouYu_Scope",
+  "Kar98K": "Kar98K_Scope",
+  "Kar98k_Satellite": "Kar98k_Satellite_Scope",
+  "Kar98k_Satellite_CFPLS21": "Kar98k_Satellite_CFPLS21_Scope_2",
+  "Kar98k_Satellite_GunNiang": "Kar98k_Satellite_GunNiang_Scope",
+  "Kar98k_Satellite_Mechanical": "Kar98k_Satellite_Mechanical_Scope",
+  "Kar98k_Satellite_Nebula": "Kar98k_Satellite_Nebula_Scope",
+  "Kar98k_Satellite_Pharaoh": "Kar98k_Satellite_Pharaoh_Scope",
+  "Kar98k_Satellite_Snake": "Kar98k_Satellite_Snake_Scope",
+  "Kar98k_Satellite_SF2_NM": "Kar98k_Satellite_SF2_NM_Scope",
+  "Kar98k_Satellite_TCG_NM": "Kar98k_Satellite_TCG_Scope",
+  "Kar98k_Satellite_Underc": "Kar98k_Satellite_Underc_Scope",
+  "Savage110BA_Stardust": "Savage110BA_StarDust_Scope",
+  "VSK94_GoldEmpire": "VSK94_GoldEmpire_Scope",
+  "VSK94_GoldEmpire_Qingchun": "VSK94_GoldEmpire_Qingchun_Scope",
+  "EVO3A1_TransportShip": "EVO3A1_TransportShip_Scope",
+  "AWM_InfernalDragon_70KG_NM": "AWM_InfernalDragon_70KG_NM_Scope",
+  "AWM_InfernalDragon_Baisa_NM": "AWM_InfernalDragon_Baisa_NM_Scope",
+  "Barrett": "BARRET_Scope",
+  "HKG36C_TransportShip": "HKG36C_TransportShip_Scope",
+  "AWM_HyperTech": "AWM_HyperTech_Scope",
+  "Kar98k_AngelicBeast": "Kar98k_AngelicBeast_Scope",
+  "EVO3A1_S_Elite": "EVO3A1_S_Elite_Scope",
+  "ScorpionEVO3A1_Elite_Aniver": "ScorpionEVO3A1_Elite_Aniver_Scope",
+  "G36C": "HKG36C_Scope",
+  "ScorpionEVO3A1_Elite_Boss": "EVO3A1_Elite_Boss_Scope",
+  "ScorpionEVO3A1_Elite_NM": "EVO3A1_S_Elite_Scope"
+};
+const SCOPE_IDX = Object.fromEntries(Object.entries(SCOPE_DATA).map(([k,v])=>[k.toLowerCase(),v]));
+function scopeOf(r,imgs){
+  const v=String(r[CFG.COL.scope]||'').split(/[,;\n|]+/).map(x=>x.trim()).filter(Boolean)[0];
+  if(v)return v.replace(/\.(png|jpg|jpeg|webp)$/i,'');
+  for(const t of imgs){
+    const k=t.split(/[\\/]/).pop().replace(/\.(png|jpg|jpeg|webp)$/i,'').replace(/^.*?BUYWEAPON_INFO_/i,'').toLowerCase();
+    if(SCOPE_IDX[k])return SCOPE_IDX[k];
+  }
+  return '';
+}
+const scopeSrcList=v=>CFG.SCOPE_DIRS.flatMap(d=>CFG.SCOPE_EXTS.map(e=>d+encodeURIComponent(v)+e));
+const scopeBtn=r=>r&&r.scope?`<button type="button" class="scopebtn" data-s="${esc(r.scope)}">SCOPE</button>`:'';
 
 /* ================= TẢI SHEET (JSONP, chạy được cả file:// ) ================= */
 let __gsN=0;
@@ -340,6 +509,7 @@ function build(headers,rows){
     raw:r,
     name:r[C.name],
     ...(x=>({imgs:x,img:x[0]||''}))((r[C.image]||'').split(/[,;\n|]+/).map(t=>t.trim()).filter(Boolean)),
+    scope:scopeOf(r,(r[C.image]||'').split(/[,;\n|]+/).map(t=>t.trim()).filter(Boolean)),
     badges:(r[C.badges]||'').split(/[,;\n|]+/).map(x=>x.trim()).filter(Boolean),
     ...(rc=>{
       const p=rc.map(c=>parseReg(c.v,r[C.name]));
@@ -438,10 +608,22 @@ function normBase(v){
   if(!n.toUpperCase().startsWith(CFG.IMG_PREFIX)) n=CFG.IMG_PREFIX+'_'+n;
   return n;
 }
+// Steyr TMP có 3-4 mã ở cột B: theo thứ tự trái -> phải: Normal, Dual, Mutation[, Charged] (3 mã mà mã thứ 3 là AWM/Charge => Normal, Dual, Charged)
+function tmpLabels(name,bases){
+  if(/gatling\s*gun/i.test(name||'')&&/wild\s*shot/i.test(name)&&bases.length===2)return ['Normal','PVE Charged'];   // Gatling Gun-Wild Shot (2 mã): Normal, PVE Charged
+  if(/\bp90\b/i.test(name||'')){   // P90-Frenzy (2 mã): PVP, PVE | P90-Wild Shot (4 mã): PVP, PVP Dual, PVE, PVE Charged
+    if(/frenzy/i.test(name)&&bases.length===2)return ['PVP','PVE'];
+    if(/wild\s*shot/i.test(name)&&bases.length===4)return ['PVP','PVP Dual','PVE','PVE Charged'];
+  }
+  if(!/\btmp\b/i.test(name||'')||bases.length<3||bases.length>4)return null;
+  if(bases.length===4)return ['Normal','Dual','Mutation','Charged'];
+  return ['Normal','Dual',/AWM|Charge/i.test(bases[2])?'Charged':'Mutation'];
+}
 function variantInfo(r){
   if(r.members) return {bases:r.members.map(m=>m.base),labels:r.members.map(m=>m.label),rows:r.members.map(m=>m.row)};
   if(!r.imgs||r.imgs.length<2) return null;
   const bases=r.imgs.map(normBase);
+  const tl=tmpLabels(r.name,bases); if(tl)return {bases,labels:tl};
   const has=(ru,b)=>ru.tokens.some(t=>t&&b.includes(t));
   const rule=CFG.VARIANT_RULES.find(ru=>bases.some(b=>has(ru,b)));   // luật đứng trước được ưu tiên
   const labels=bases.map((b,k)=>{
@@ -503,6 +685,8 @@ function buildEntries(list){
   return out;
 }
 $('grid').addEventListener('click',e=>{
+  const sb=e.target.closest('.scopebtn');
+  if(sb){openScope(sb.dataset.s);return}
   if(e.target.closest('.tgl')&&!e.target.closest('.tgl button'))return;
   const b=e.target.closest('.tgl button');
   if(!b){                                              // bấm vào thẻ => mở popup
@@ -515,7 +699,7 @@ $('grid').addEventListener('click',e=>{
     const m=it._g.members[+b.dataset.j];if(!m)return;
     const row=m.row,title=titleOf(row);
     it.dataset.i=ROWS.indexOf(row);it.classList.toggle('rm',removedIn(row));
-    it.querySelector('.pic').innerHTML=imgTag(weaponSrcList(row.img,row),'w',title)||'<div class="noimg">(no image)</div>';
+    it.querySelector('.pic').innerHTML=(imgTag(weaponSrcList(row.img,row),'w',title)||'<div class="noimg">(no image)</div>')+scopeBtn(row);
     it.querySelector('.name>span').innerHTML=titleHTML(row);
     it.querySelector('.badges').innerHTML=row.badges.map(x=>imgTag(badgeSrcList(x),'b',x)).join('');
     it.querySelectorAll('.tgl button').forEach(x=>x.classList.toggle('on',x===b));
@@ -531,7 +715,7 @@ $('grid').addEventListener('click',e=>{
 });
 
 /* ================= BỘ LỌC ================= */
-// Nhóm 1: C → D → E (TYPE/CATEGORIZED/WEAPON LIST) ; Nhóm 2: F → G → H (CLASS/PVE/NANO) ; Badges (I) ; Khu vực (J–V)
+// Nhóm 1: C → D → E (TYPE/CATEGORIZED/WEAPON LIST) ; SCOPE (F) ; Nhóm 2: G → H → I (CLASS/CLASS/SPECIAL) ; Badges (J) ; Khu vực (K–W)
 const GROUPS=[
   {key:'g1',cols:[CFG.COL.c,CFG.COL.d,CFG.COL.e]},
   {key:'g2',cols:[CFG.COL.f,CFG.COL.g,CFG.COL.h]}
@@ -786,7 +970,7 @@ function render(){
     const r=en.row;
     const title=titleOf(r);
     return `<div class="item${removedIn(r)?' rm':''}" data-i="${ROWS.indexOf(r)}">
-      <div class="pic">${imgTag(weaponSrcList(r.img,r),'w',title)||'<div class="noimg">(no image)</div>'}</div>
+      <div class="pic">${imgTag(weaponSrcList(r.img,r),'w',title)||'<div class="noimg">(no image)</div>'}${scopeBtn(r)}</div>
       <div class="foot">${(vi=>vi?`<div class="tgl" style="display:flex">${vi.labels.map((l,j)=>`<button class="${j?'':'on'}" data-j="${j}">${esc(l)}</button>`).join('')}</div>`:'<div class="tgl"></div>')(en.members?{labels:en.members.map(m=>en.ru.labels[m.j]||en.ru.tokens[m.j]||'#')}:variantInfo(r))}
       <div class="name"><span>${titleHTML(r)}</span></div></div>
       <div class="badges">${r.badges.map(b=>imgTag(badgeSrcList(b),'b',b)).join('')}</div>
@@ -806,8 +990,22 @@ function render(){
 }
 
 /* ================= TOOLTIP THEO KHU VỰC ================= */
-const tip=$('tip');
+const tip=$('tip'),sp=$('sp');
+function showScopePreview(btn,e){
+  if(sp.dataset.cur!==btn.dataset.s){
+    sp.dataset.cur=btn.dataset.s;
+    sp.innerHTML=imgTag(scopeSrcList(btn.dataset.s),'sw','scope')||'<div class="noimg">(no image)</div>';
+  }
+  sp.style.display='block';
+  const w=240,h=180;
+  let x=Math.min(Math.max(4,e.clientX-w-12),innerWidth-w-4);
+  let y=e.clientY-h-12;if(y<4)y=e.clientY+18;
+  sp.style.left=x+'px';sp.style.top=y+'px';
+}
 $('grid').addEventListener('mousemove',e=>{
+  const sb=e.target.closest('.scopebtn');
+  if(sb){tip.style.display='none';showScopePreview(sb,e);return}
+  sp.style.display='none';
   tip.style.display='none';
   if(!CFG.HOVER_TIP)return;   // tooltip khu vực đã tắt (HOVER_TIP:true để bật lại)
   const it=e.target.closest('.item');
@@ -825,7 +1023,17 @@ $('grid').addEventListener('mousemove',e=>{
   if(y+h>innerHeight-8)y=e.clientY-h-16;
   tip.style.left=Math.max(4,x)+'px';tip.style.top=Math.max(4,y)+'px';
 });
-$('grid').addEventListener('mouseleave',()=>tip.style.display='none');
+$('grid').addEventListener('mouseleave',()=>{tip.style.display='none';sp.style.display='none'});
+
+/* ================= CỬA SỔ SCOPE (bấm nút SCOPE) ================= */
+function openScope(name){
+  sp.style.display='none';tip.style.display='none';
+  $('mimg').innerHTML=imgTag(scopeSrcList(name),'sw','scope')||'<div class="noimg">(no image)</div>';
+  $('modal').classList.add('on');
+}
+function closeScope(){$('modal').classList.remove('on');$('mimg').innerHTML=''}
+$('mx').onclick=closeScope;
+$('modal').addEventListener('click',e=>{if(e.target===$('modal'))closeScope()});
 
 /* ================= POPUP CHI TIẾT VŨ KHÍ (bấm vào thẻ) ================= */
 let POP=null;
@@ -864,7 +1072,7 @@ $('pop').addEventListener('click',e=>{
   if(e.target===$('pop')){closePop();return}
   const b=e.target.closest('#ptgl button');if(b&&POP)popRender(+b.dataset.j);
 });
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closePop()});
+document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;if($('modal').classList.contains('on'))closeScope();else closePop()});
 
 /* ================= KHỞI CHẠY (mỗi lần F5 tải lại Sheet) ================= */
 $('btnSearch').onclick=()=>{state.page=1;render()};
