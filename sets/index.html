@@ -148,6 +148,8 @@
   <div class="dcodes" id="dcodes"></div>
 </div></div>
 
+<!-- tên vũ khí theo khu vực lấy từ ITEMCFT WORLD (file do trang Weapon tạo) -->
+<script src="../weapon/regions.js" onerror="void 0"></script>
 <script>
 /* =========================================================
    CẤU HÌNH — chỉ sửa phần này
@@ -165,14 +167,16 @@ const CONFIG = {
   IMG_PREFIX: 'BUYWEAPON_INFO',
   BADGE_DIR: 'img/badges/',                                  // file tag_<tên>.PNG
   EXCLUDE_TOKENS: ['NM'],                                    // mã có đoạn này (vd ..._10th_NM) không được lấy khi khớp theo TỪ KHOÁ (ghi mã đầy đủ thì vẫn lấy)
-  REGION_COL_FROM: 9,                                        // cột J
-  REGION_COL_TO: 21,                                         // cột V
+  REGION_COL_FROM: 10,                                       // cột K (sau khi chèn cột SCOPE ở F)
+  REGION_COL_TO: 22,                                         // cột W
+  CLOSED_FROM: 15,                                           // cột P–W: khu vực đã đóng, ô có Removed hiện thêm bên dưới 5 khu vực trong popup chi tiết
   POPUP_REGIONS: ['China','Vietnam','Brazil','West','Philippines'],   // 5 dòng khu vực trong popup chi tiết (giống trang Weapon)
   REMOVED_WORDS: ['Removed','Closed'],
   DEFAULT_LABELS: ['Normal','Change'],
   // Chữ trên nút biến thể = COPY NGUYÊN từ CFG.VARIANT_RULES của weapon/index.html (khi trang Weapon đổi luật thì dán lại đoạn này).
   // Luật có merge:true: các DÒNG khác nhau trong Sheet (mã chỉ khác nhau ở đoạn tên) được gộp thành 1 thẻ có nhiều nút, như trang Weapon.
   VARIANT_RULES: [
+    { match:'M249SPW', tokens:['','_Changemode','_Chg'], labels:['Normal','Shoulder Firing','Shoulder Firing'] },
     { tokens:['DualUZI-Gold','DualUZI-Gold_2'], labels:['World','Vietnam'] },
     { tokens:['RifleBeast','KnifeBeast'], labels:['Default','Change Mode'] },
     { tokens:['BaiHu_VN26_NM','BaiHu_VN26'], labels:['Original','Virtus.Pro'] },
@@ -201,6 +205,7 @@ const CONFIG = {
 
 /* ---------------- tiện ích ---------------- */
 const $ = id => document.getElementById(id);
+const AUTO_SHOW = /[?&]auto\b/.test(location.search);   // thêm ?auto vào link: tên tự điền hiện màu xanh
 const norm = s => String(s || '').toLowerCase();
 const reEsc = s => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const attr = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
@@ -271,9 +276,107 @@ function regionsOf(r, labels, weaponName){
   for (let i = CONFIG.REGION_COL_FROM; i <= CONFIG.REGION_COL_TO; i++){
     const label = ((labels && labels[i]) || '').trim() || colLetter(i);
     const p = regionHTML(r[i], weaponName);
-    out.push({label, html: p.html, removed: p.removed});
+    out.push({label: label.replace(/[\u0335\u0336]/g, ''), idx: i, html: p.html, removed: p.removed, auto: !!(r.auto && r.auto.has(i))});
   }
   return out;
+}
+
+/* ================= TỰ ĐIỀN TÊN KHU VỰC TỪ "ITEMCFT WORLD" (weapon/regions.json) =================
+   - Ô khu vực trong Sheet có chữ  => luôn dùng chữ trong Sheet (sửa tay trong Sheet là thắng).
+   - Ô trống                       => tự lấy tên từ file Item??.csv của khu vực đó.
+   - Ô ghi "-"                     => khu vực đó KHÔNG có vũ khí này, không tự điền.
+   Cách nhận diện vũ khí: so tên các ô khu vực đã có (và cột A) với tên trong file CSV -> ra mã _ItemIndexInBute -> lấy tên ở khu vực khác.
+   Nếu cùng 1 vũ khí có 2 dòng (vd bản Trung Quốc và bản _NM), dòng nào đã có tên ở khu vực đó thì dòng kia không bị điền thêm. */
+const AUTO_NORM = s => String(s || '').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+const AUTO_BLANK = /^[\s\-–—]+$/;
+
+function autoFillRegions(headers, rows, data, opt) {
+  opt = opt || {};
+  const from = opt.from, to = opt.to, nameCol = opt.nameCol || 0, imgCol = opt.imgCol == null ? 1 : opt.imgCol;
+  const regs = (data && data.regions) || {};
+  // cột khu vực nào có dữ liệu CSV
+  const cols = [];
+  for (let i = from; i <= to && i < headers.length; i++) {
+    const h = String(headers[i] || '').replace(/[̵̶]/g, '').trim().toLowerCase();
+    const r = Object.keys(regs).find(k => k.toLowerCase() === h);
+    if (r) cols.push({ i, r });
+  }
+  if (!cols.length) return { filled: 0, unresolved: 0 };
+  // chỉ mục tên -> mã cho từng khu vực
+  const idx = {};
+  for (const { r } of cols) {
+    const m = idx[r] = new Map();
+    const al = (data.alias && data.alias[r]) || {};
+    for (const [k, names] of Object.entries(regs[r]))
+      for (const n of names.concat(al[k] || [])) for (const z of new Set([AUTO_NORM(n), AUTO_NORM(n.replace(/\s*[(\[][^)\]]*[)\]]\s*$/, ''))])) { if (!z) continue; if (!m.has(z)) m.set(z, new Set()); m.get(z).add(k) }
+  }
+  const cover = k => cols.reduce((s, { r }) => s + (regs[r][k] ? 1 : 0), 0);
+  const val = (row, i) => String(row[i] == null ? '' : row[i]).replace(/[̵̶]/g, '').trim();
+
+  // 1) tìm mã cho từng dòng
+  const info = rows.map(row => {
+    const score = new Map(), add = (k, w) => score.set(k, (score.get(k) || 0) + w);
+    const ev = new Map(), mark = (k, r) => { if (!ev.has(k)) ev.set(k, new Set()); ev.get(k).add(r) };   // khu vực nào đã khớp với mã k
+    const blocked = new Set();
+    for (const { i, r } of cols) {
+      const v = val(row, i);
+      if (!v) continue;
+      if (AUTO_BLANK.test(v)) { blocked.add(i); continue }
+      const hit = idx[r].get(AUTO_NORM(v.replace(/\(?\b(removed|closed)\b\)?/gi, '')));
+      if (hit) hit.forEach(k => { add(k, 3); mark(k, r) });   // tên đã ghi trong Sheet: tín hiệu mạnh nhất
+    }
+    // tên hình cột B (bỏ BUYWEAPON_INFO_) thường trùng tên nội bộ _NAME trong CSV (yếu hơn cột A vì 1 hình có thể dùng chung nhiều dòng)
+    String(row[imgCol] || '').split(/[,;\n|]+/).map(t => t.trim().replace(/^.*?BUYWEAPON_INFO_/i, '')).filter(Boolean).forEach(im => {
+      const hits = new Map();   // mã -> số khu vực khớp
+      for (const { r } of cols) { const ks = new Set(); for (const z of [im, im.replace(/_(NM|RU|VN|BR|PH|WE|VNWE|CN|TW|JP|KR|ID|EU|ES|GC|SC|GL)$/i, '')]) { const h = idx[r].get(AUTO_NORM(z)); if (h) h.forEach(k => ks.add(k)) } ks.forEach(k => { hits.set(k, (hits.get(k) || 0) + 1); mark(k, r) }) }
+      hits.forEach((c, k) => add(k, 1 + c * 0.1));
+    });
+    // tên cột A (thử thêm bản bỏ chữ biến thể, vd "AK47-B Victor Dragon" -> "AK47 Victor Dragon")
+    const nm = String(row[nameCol] || '');
+    for (const [z, w] of [[AUTO_NORM(nm), 2], [AUTO_NORM(nm.replace(/^(\S+?)-[A-Z]\s+/, '$1 ')), 1.2]]) {
+      if (!z) continue;
+      const hits = new Map();
+      for (const { r } of cols) { const h = idx[r].get(z); if (h) h.forEach(k => { hits.set(k, (hits.get(k) || 0) + 1); mark(k, r) }) }
+      if (hits.size) { hits.forEach((c, k) => add(k, w + c * 0.1)); break }
+    }
+    const keys = [...score.entries()].sort((x, y) => y[1] - x[1] || cover(y[0]) - cover(x[0]) || (+x[0]) - (+y[0])).map(x => x[0]);
+    const best = keys.length ? score.get(keys[0]) : 0;
+    return { keys: keys.filter(k => score.get(k) === best), all: keys, ev, blocked };
+  });
+
+  // 2) nhóm cặp dòng bản thường / bản _NM (tên hình chỉ khác đuôi _NM)
+  const par = rows.map((_, n) => n), find = n => par[n] === n ? n : (par[n] = find(par[n]));
+  const join = (a, b) => { a = find(a); b = find(b); if (a !== b) par[b] = a };
+  const img0 = n => String(rows[n][imgCol] || '').split(/[,;\n|]+/)[0].trim().toLowerCase();
+  const base = new Map();
+  rows.forEach((_, n) => { const im = img0(n); if (im && !/_nm$/.test(im)) base.set(im, n) });
+  rows.forEach((_, n) => { const im = img0(n); if (/_nm$/.test(im) && base.has(im.replace(/_nm$/, ''))) join(base.get(im.replace(/_nm$/, '')), n) });
+  const groups = new Map();
+  rows.forEach((_, n) => { const g = find(n); if (!groups.has(g)) groups.set(g, []); groups.get(g).push(n) });
+
+  let filled = 0, unresolved = 0;
+  rows.forEach((row, n) => {
+    const x = info[n];
+    for (const i of x.blocked) row[i] = '';
+    if (!x.keys.length) { unresolved++; return }
+    const grp = groups.get(find(n));
+    for (const { i, r } of cols) {
+      if (val(row, i) || x.blocked.has(i)) continue;
+      if (grp.length > 1) {
+        if (grp.some(m => m !== n && (val(rows[m], i) || info[m].blocked.has(i)))) continue;   // dòng anh em đã có tên khu vực này
+        const isNM = m => /_nm(\b|_|$)/i.test(String(rows[m][imgCol] || ''));
+        const pref = grp.filter(m => r === 'China' ? !isNM(m) : isNM(m));
+        if ((pref.length ? pref[0] : grp[0]) !== n) continue;
+      }
+      // mã chính; nếu khu vực này không có thì chỉ dùng mã phụ đã khớp tên NGAY TRONG khu vực này (tránh lấy nhầm vũ khí khác)
+      const k = x.keys.find(k => regs[r][k]) || x.all.find(k => regs[r][k] && x.ev.get(k) && x.ev.get(k).has(r));
+      if (!k) continue;
+      row[i] = regs[r][k][0];
+      (row.auto || (row.auto = new Set())).add(i);
+      filled++;
+    }
+  });
+  return { filled, unresolved };
 }
 
 /* ---------------- tìm ảnh (giống trang Weapon) ---------------- */
@@ -360,7 +463,7 @@ function variantLabels(codes, name){
   const bases = codes.map(baseOf);
   const tl = tmpLabels(name, bases); if (tl) return tl;
   const has = (ru, b) => ru.tokens.some(t => t && b.includes(t));
-  const rule = CONFIG.VARIANT_RULES.find(ru => bases.some(b => has(ru, b)));
+  const rule = CONFIG.VARIANT_RULES.find(ru => (!ru.match || bases.some(b => b.toLowerCase().includes(ru.match.toLowerCase()))) && bases.some(b => has(ru, b)));
   return bases.map((b, k) => {
     if (rule){
       let bi = -1, len = -1;
@@ -652,8 +755,12 @@ function openDetail(i){
     $('dreg').innerHTML = '<table>' + CONFIG.POPUP_REGIONS.map(n => {
       const r = info.regions.find(x => norm(x.label).trim() === norm(n));
       const has = r && r.html;
-      return `<tr${has && r.removed ? ' class="rm"' : ''}><td>${html(n)}</td><td class="sep">|</td><td>${has ? r.html : '–'}</td></tr>`;
-    }).join('') + '</table>';
+      const au = has && AUTO_SHOW && r.auto;
+      return `<tr${has && r.removed ? ' class="rm"' : ''}><td>${html(n)}</td><td class="sep">|</td><td${au ? ' style="color:#1a73e8" title="Tự điền từ ITEMCFT WORLD"' : ''}>${has ? r.html : '–'}</td></tr>`;
+    }).join('') +
+    /* cột P–W: ô có Removed (gạch ngang) => thêm khu vực đó bên dưới 5 khu vực chính, theo thứ tự cột */
+    info.regions.filter(r => r.idx >= CONFIG.CLOSED_FROM && r.html && !CONFIG.POPUP_REGIONS.some(n => norm(n) === norm(r.label).trim()))
+      .map(r => `<tr class="rm"><td>${html(r.label)}</td><td class="sep">|</td><td>${r.html}</td></tr>`).join('') + '</table>';
     $('dimg').innerHTML = imgTag(v.code, info.hints);
     $('dvars').innerHTML = labels.map((l, k) => `<button type="button" class="vbtn${k === cur ? ' on' : ''}" data-v="${k}">${html(l)}</button>`).join('');
     const names = codes.map(c => html(rawCode(c)));
@@ -688,6 +795,12 @@ async function init(){
     const setTab = res[0].value;
     const okTabs = [], bad = [];
     res.slice(1).forEach((x, i) => x.status === 'fulfilled' ? okTabs.push(x.value) : bad.push(CONFIG.WEAPON_TABS[i]));
+    if (window.REGIONS_DATA && okTabs.length){                // tự điền ô khu vực trống (cột K–O) từ ITEMCFT WORLD, giống trang Weapon
+      try{
+        const st = autoFillRegions(okTabs[0].labels, okTabs.flatMap(t => t.rows), window.REGIONS_DATA, {from: CONFIG.REGION_COL_FROM, to: CONFIG.REGION_COL_TO, nameCol: 0, imgCol: 1});
+        console.log('[ITEMCFT] tự điền', st.filled, 'ô');
+      }catch(e){ console.warn('[ITEMCFT] lỗi tự điền:', e); }
+    }
     WEAPONS = okTabs.flatMap(t => {
       const bc = t.labels.findIndex(h => /^badges?$/i.test(h));
       const badgeCol = bc >= 0 ? bc : 8;
