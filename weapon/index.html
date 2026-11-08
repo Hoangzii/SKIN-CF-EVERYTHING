@@ -168,6 +168,8 @@ const CFG = {
   DEFAULT_LABELS: ['Normal','Change'],
   // Luật có merge:true sẽ GỘP nhiều dòng của Sheet thành 1 khung: các file chỉ khác nhau ở token (hoặc không có token = nút đầu/mặc định).
   VARIANT_RULES: [
+    { match:'M249SPW', tokens:['','_Changemode','_Chg'], labels:['Normal','Shoulder Firing','Shoulder Firing'] },   // mọi khẩu M249 SPW có 2 chế độ
+    { match:'M249SPW', tokens:['','_Changemode','_Chg'], labels:['Normal','Change Mode','Change Mode'] },   // mọi M249 SPW có 2 hình (Urban, Unyielding Spirit...). match = chỉ áp dụng cho tên hình có chứa đoạn này
     { tokens:['DualUZI-Gold','DualUZI-Gold_2'], labels:['World','Vietnam'] },
     { tokens:['RifleBeast','KnifeBeast'], labels:['Default','Change Mode'] },
     { tokens:['BaiHu_VN26_NM','BaiHu_VN26'], labels:['Original','Virtus.Pro'] },
@@ -630,7 +632,7 @@ function variantInfo(r){
   const bases=r.imgs.map(normBase);
   const tl=tmpLabels(r.name,bases); if(tl)return {bases,labels:tl};
   const has=(ru,b)=>ru.tokens.some(t=>t&&b.includes(t));
-  const rule=CFG.VARIANT_RULES.find(ru=>bases.some(b=>has(ru,b)));   // luật đứng trước được ưu tiên
+  const rule=CFG.VARIANT_RULES.find(ru=>(!ru.match||bases.some(b=>b.toLowerCase().includes(ru.match.toLowerCase())))&&bases.some(b=>has(ru,b)));   // luật đứng trước được ưu tiên
   const labels=bases.map((b,k)=>{
     if(rule){
       let bi=-1,len=-1;
