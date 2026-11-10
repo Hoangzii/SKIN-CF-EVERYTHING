@@ -75,6 +75,8 @@ label.chk{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
 #pop,#pop *{font-family:'Lexend',system-ui,sans-serif;font-weight:700}
 #pop .pbox{position:relative;width:max-content;min-width:min(780px,100%);max-width:100%;max-height:92vh;overflow:auto;background:var(--card);color:var(--tx);border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.4)}
 #pop .phd{background:var(--label);color:var(--label-tx);padding:16px 52px 16px 22px;font-size:18px;line-height:1.3}
+#pop .phd .pbdg{display:inline-flex;align-items:center;gap:6px;margin-left:10px;vertical-align:middle;position:relative;top:-2px}   /* thẻ BADGES sau tên vũ khí trong popup */
+#pop .phd .pbdg img{height:24px;width:auto;object-fit:contain}
 #pop .px{position:absolute;top:12px;right:16px;font-size:22px;line-height:1;cursor:pointer;user-select:none;color:var(--label-tx)}
 #pop .pbd{display:flex;flex-wrap:wrap;gap:24px;padding:20px 22px;align-items:center}
 #pop .pleft{flex:1 1 300px;min-width:0}
@@ -150,7 +152,9 @@ const CFG = {
   // đặt dấu # đầu dòng để tạm tắt). Thêm tab mới chỉ cần thêm 1 dòng ở tab TABS, KHÔNG phải sửa file này.
   TAB_LIST: 'TABS',
   // Cách 2 (dự phòng nếu chưa có tab TABS): liệt kê tên tab hoặc gid ở đây.
-  SHEETS: ['2098056846' , '953162863' , '1009811895' , '1975501148' /* RIFLE */ /*, 'SNIPER', 'SMG', 'SHOTGUN', 'MG' */],
+  // Mọi tab vũ khí (KHÔNG có WEAPON SETS = 1723919006, tab đó dành cho trang /sets/)
+  SHEETS: ['2098056846' /* RIFLE */, '953162863' /* SNIPER */, '1009811895' /* SMG */, '1975501148' /* MG */,
+           '969100198' /* SHOTGUN */, '1168502877' /* PISTOL */, '750789659' /* MELEE */, '591776108' /* THROW */],
   IMG_DIR  : 'img/',
   // ---- SCOPE ----
   // Hình scope: tìm trong weapon/img/SCOPE/ trước; không có thì tìm tiếp thư mục SCOPE của trang /skin/ (xoá dòng thứ 2 nếu chỉ muốn dùng weapon/img/SCOPE).
@@ -168,6 +172,8 @@ const CFG = {
   // của dòng đó trước, rồi thư mục gốc Img/, rồi các thư mục trong danh sách dưới đây. Thêm tên thư mục mới vào đây nếu cần.
   IMG_SUBDIRS: ['RIFLE','SNIPER','SMG','SHOTGUN','MG','PISTOL','MELEE','GRENADE','FLASHBANG','SMOKE'],
   BADGE_DIR: 'img/badges/',
+  BADGE_POPUP_ONLY: ['slug'],   // thẻ chỉ hiện trong popup (không hiện trên thẻ ngoài lưới)
+  BADGE_ALIAS: { slug:'slugammo14' },   // chữ ghi ở cột BADGES -> tên file (bỏ tag_): ghi "Slug" => tag_slugammo14.png. Thêm cặp mới nếu tên file khác chữ ghi trong Sheet
   IMG_PREFIX: 'BUYWEAPON_INFO',
   // Chỉ số cột (A=0). Đổi tại đây nếu sheet đổi cấu trúc.
   // Cột F = SCOPE (chèn sau WEAPON LIST) => CLASS/CLASS/SPECIAL/BADGES/khu vực lùi 1 cột: G,H,I,J, K–W
@@ -180,6 +186,7 @@ const CFG = {
   DEFAULT_LABELS: ['Normal','Change'],
   // Luật có merge:true sẽ GỘP nhiều dòng của Sheet thành 1 khung: các file chỉ khác nhau ở token (hoặc không có token = nút đầu/mặc định).
   VARIANT_RULES: [
+    { match:'_Slug', tokens:['','_BuckShot','_Slug'], labels:['Normal','Normal','Slug'] },   // shotgun có 2 mã: mã kết thúc _Slug = Slug, mã còn lại = Normal
     { match:'M249SPW', tokens:['','_Changemode','_Chg'], labels:['Normal','Shoulder Firing','Shoulder Firing'] },   // mọi khẩu M249 SPW có 2 chế độ
     { match:'M249SPW', tokens:['','_Changemode','_Chg'], labels:['Normal','Change Mode','Change Mode'] },   // mọi M249 SPW có 2 hình (Urban, Unyielding Spirit...). match = chỉ áp dụng cho tên hình có chứa đoạn này
     { tokens:['DualUZI-Gold','DualUZI-Gold_2'], labels:['World','Vietnam'] },
@@ -684,9 +691,11 @@ function weaponSrcList(v,row){
   const exts=[...new Set(ext?[ext,'.PNG','.png']:['.PNG','.png','.jpg'])];
   return imgDirs(row).flatMap(d=>exts.map(e=>d+base+e));
 }
+const cardBadges=list=>(list||[]).filter(b=>!(CFG.BADGE_POPUP_ONLY||[]).some(x=>x.toLowerCase()===String(b).trim().toLowerCase()));   // bỏ thẻ chỉ-dành-cho-popup
 function badgeSrcList(v){
   let n=v.split(/[\\/]/).pop().replace(/\.(png|jpg|jpeg|webp)$/i,'').trim();
   n=n.replace(/^tag_/i,'');
+  n=(CFG.BADGE_ALIAS||{})[n.toLowerCase()]||n;
   return ['.PNG','.png'].flatMap(e=>[CFG.BADGE_DIR+'tag_'+n+e,CFG.BADGE_DIR+'tag_'+n.toLowerCase()+e]);
 }
 function fallbackImg(img){
@@ -719,6 +728,12 @@ function normBase(v){
 }
 // Steyr TMP có 3-4 mã ở cột B: theo thứ tự trái -> phải: Normal, Dual, Mutation[, Charged] (3 mã mà mã thứ 3 là AWM/Charge => Normal, Dual, Charged)
 function tmpLabels(name,bases){
+  if(/vepr-?\s*12/i.test(name||'')&&/rampage/i.test(name||'')&&bases.length>=2&&bases.length<=3)   // Vepr-12 Rampage: mã thường = PVP, có _PvE = PVE, có _Slug = PVE Slug (không phụ thuộc thứ tự)
+    return bases.map(b=>/_slug/i.test(b)?'PVE Slug':/_pve/i.test(b)?'PVE':'PVP');
+  if(/\baa-?12\b/i.test(name||'')&&!bases.some(b=>/_slug$/i.test(b))){   // AA-12 có mã _Slug (vd AA12_IronBeast + AA12_IronBeast_Slug) => để luật Slug xử lý: Normal, Slug   // AA-12 theo thứ tự mã ở cột B: 3 mã = PVP, PVE, Change Mode | 2 mã = PVP, PVE
+    if(bases.length===3)return ['PVP','PVE','Change Mode'];
+    if(bases.length===2)return ['PVP','PVE'];
+  }
   if(/gatling\s*gun/i.test(name||'')&&/wild\s*shot/i.test(name)&&bases.length===2)return ['Normal','PVE Charged'];   // Gatling Gun-Wild Shot (2 mã): Normal, PVE Charged
   if(/\bp90\b/i.test(name||'')){   // P90-Frenzy (2 mã): PVP, PVE | P90-Wild Shot (4 mã): PVP, PVP Dual, PVE, PVE Charged
     if(/frenzy/i.test(name)&&bases.length===2)return ['PVP','PVE'];
@@ -810,7 +825,7 @@ $('grid').addEventListener('click',e=>{
     it.dataset.i=ROWS.indexOf(row);it.classList.toggle('rm',removedIn(row));
     it.querySelector('.pic').innerHTML=(imgTag(weaponSrcList(row.img,row),'w',title)||'<div class="noimg">(no image)</div>')+scopeBtn(row);
     it.querySelector('.name>span').innerHTML=titleHTML(row);
-    it.querySelector('.badges').innerHTML=row.badges.map(x=>imgTag(badgeSrcList(x),'b',x)).join('');
+    it.querySelector('.badges').innerHTML=cardBadges(row.badges).map(x=>imgTag(badgeSrcList(x),'b',x)).join('');
     it.querySelectorAll('.tgl button').forEach(x=>x.classList.toggle('on',x===b));
     fillScopes(it);
     return;
@@ -1083,7 +1098,7 @@ function render(){
       <div class="pic">${imgTag(weaponSrcList(r.img,r),'w',title)||'<div class="noimg">(no image)</div>'}${scopeBtn(r)}</div>
       <div class="foot">${(vi=>vi?`<div class="tgl" style="display:flex">${vi.labels.map((l,j)=>`<button class="${j?'':'on'}" data-j="${j}">${esc(l)}</button>`).join('')}</div>`:'<div class="tgl"></div>')(en.members?{labels:en.members.map(m=>en.ru.labels[m.j]||en.ru.tokens[m.j]||'#')}:variantInfo(r))}
       <div class="name"><span>${titleHTML(r)}</span></div></div>
-      <div class="badges">${r.badges.map(b=>imgTag(badgeSrcList(b),'b',b)).join('')}</div>
+      <div class="badges">${cardBadges(r.badges).map(b=>imgTag(badgeSrcList(b),'b',b)).join('')}</div>
       </div>`;
   }).join('');
   [...$('grid').children].forEach((el,k)=>{el._g=slice[k].members?slice[k]:null});
@@ -1154,7 +1169,7 @@ $('modal').addEventListener('click',e=>{if(e.target===$('modal'))closeScope()});
 let POP=null;
 function popRender(k){
   const v=POP.vars[k],r=v.row;
-  $('ptitle').textContent=r.name;
+  $('ptitle').innerHTML=esc(r.name)+(r.badges&&r.badges.length?'<span class="pbdg">'+r.badges.map(b=>imgTag(badgeSrcList(b),'b',b)).join('')+'</span>':'');   // tên + thẻ BADGES (cột J)
   $('ppic').innerHTML=imgTag(weaponSrcList(v.img,r),'w',r.name)||'<div class="noimg">(no image)</div>';   // chỉ hình cột IMAGE
   $('ptgl').querySelectorAll('button').forEach(b=>b.classList.toggle('on',+b.dataset.j===k));
   $('preg').innerHTML='<table>'+CFG.POPUP_REGIONS.map(n=>{

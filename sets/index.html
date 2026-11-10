@@ -79,6 +79,8 @@
   #dpop,#dpop *{font-family:'Lexend',system-ui,sans-serif;font-weight:700}
   #dpop{position:relative;width:max-content;min-width:min(780px,100%);max-width:100%;max-height:92vh;overflow:auto;background:var(--card);color:var(--tx);border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.4)}
   #dpop .dhead{background:var(--label);color:var(--label-tx);padding:16px 52px 16px 22px;font-size:18px;line-height:1.3}
+  #dpop .dhead .dbdg{display:inline-flex;align-items:center;gap:6px;margin-left:10px;vertical-align:middle;position:relative;top:-2px}   /* thẻ BADGES sau tên vũ khí */
+  #dpop .dhead .dbdg img{height:24px;width:auto;object-fit:contain}
   #dclose{position:absolute;top:12px;right:16px;font-size:22px;line-height:1;cursor:pointer;user-select:none;color:var(--label-tx);background:none;border:0;padding:0}
   #dpop .dmain{display:flex;flex-wrap:wrap;gap:24px;padding:20px 22px;align-items:center}
   #dpop .dleft{flex:1 1 300px;min-width:0}
@@ -166,6 +168,8 @@ const CONFIG = {
   IMG_SUBDIRS: ['RIFLE','SNIPER','SMG','SHOTGUN','MG','PISTOL','MELEE','GRENADE','FLASHBANG','SMOKE','SCOPE'],
   IMG_PREFIX: 'BUYWEAPON_INFO',
   BADGE_DIR: 'img/badges/',                                  // file tag_<tên>.PNG
+  BADGE_POPUP_ONLY: ['slug'],                                // thẻ chỉ hiện trong popup chi tiết
+  BADGE_ALIAS: { slug: 'slugammo14' },                       // ghi "Slug" ở cột BADGES => tag_slugammo14.png (giống trang Weapon)
   EXCLUDE_TOKENS: ['NM'],                                    // mã có đoạn này (vd ..._10th_NM) không được lấy khi khớp theo TỪ KHOÁ (ghi mã đầy đủ thì vẫn lấy)
   REGION_COL_FROM: 10,                                       // cột K (sau khi chèn cột SCOPE ở F)
   REGION_COL_TO: 22,                                         // cột W
@@ -176,6 +180,7 @@ const CONFIG = {
   // Chữ trên nút biến thể = COPY NGUYÊN từ CFG.VARIANT_RULES của weapon/index.html (khi trang Weapon đổi luật thì dán lại đoạn này).
   // Luật có merge:true: các DÒNG khác nhau trong Sheet (mã chỉ khác nhau ở đoạn tên) được gộp thành 1 thẻ có nhiều nút, như trang Weapon.
   VARIANT_RULES: [
+    { match:'_Slug', tokens:['','_BuckShot','_Slug'], labels:['Normal','Normal','Slug'] },   // shotgun có 2 mã: mã kết thúc _Slug = Slug, mã còn lại = Normal
     { match:'M249SPW', tokens:['','_Changemode','_Chg'], labels:['Normal','Shoulder Firing','Shoulder Firing'] },
     { tokens:['DualUZI-Gold','DualUZI-Gold_2'], labels:['World','Vietnam'] },
     { tokens:['RifleBeast','KnifeBeast'], labels:['Default','Change Mode'] },
@@ -437,11 +442,13 @@ function imgTag(code, hints){
   return `<img class="w" loading="lazy" src="${attr(first)}" alt="" data-alts="${attr(JSON.stringify(rest))}" onerror="__fb(this)">`;
 }
 function badgeList(v){
-  const n = String(v).split(/[\\/]/).pop().replace(/\.(png|jpg|jpeg|webp)$/i, '').trim().replace(/^tag_/i, '');
+  let n = String(v).split(/[\\/]/).pop().replace(/\.(png|jpg|jpeg|webp)$/i, '').trim().replace(/^tag_/i, '');
+  n = (CONFIG.BADGE_ALIAS || {})[n.toLowerCase()] || n;
   const p = [];
   for (const e of ['.PNG', '.png']) for (const b of ['tag_' + n, 'tag_' + n.toLowerCase()]) p.push(CONFIG.WEAPON_BASE + fixPath(CONFIG.BADGE_DIR + b + e));
   return [...new Set(p)];
 }
+const cardBadges = list => (list || []).filter(b => !(CONFIG.BADGE_POPUP_ONLY || []).some(x => norm(x) === norm(b).trim()));   // bỏ thẻ chỉ-dành-cho-popup
 function badgesTag(list, cls){
   if (!list || !list.length) return '';
   return `<div class="badges${cls ? ' ' + cls : ''}">` + list.map(b => {
@@ -453,6 +460,12 @@ function badgesTag(list, cls){
 /* ---------------- nhãn nút biến thể (luật của trang Weapon) ---------------- */
 const baseOf = c => { let n = String(c || '').split(/[\\/]/).pop().trim().replace(/\.(png|jpg|jpeg|webp)$/i, ''); if (!n.toUpperCase().startsWith(CONFIG.IMG_PREFIX)) n = CONFIG.IMG_PREFIX + '_' + n; return n; };
 function tmpLabels(name, bases){   // Steyr TMP 3-4 mã: Normal, Dual, Mutation[, Charged] (mã thứ 3 là AWM/Charge => Charged)
+  if(/vepr-?\s*12/i.test(name||'')&&/rampage/i.test(name||'')&&bases.length>=2&&bases.length<=3)   // Vepr-12 Rampage: mã thường = PVP, có _PvE = PVE, có _Slug = PVE Slug (không phụ thuộc thứ tự)
+    return bases.map(b=>/_slug/i.test(b)?'PVE Slug':/_pve/i.test(b)?'PVE':'PVP');
+  if(/\baa-?12\b/i.test(name||'')&&!bases.some(b=>/_slug$/i.test(b))){   // AA-12 có mã _Slug (vd AA12_IronBeast + AA12_IronBeast_Slug) => để luật Slug xử lý: Normal, Slug   // AA-12 theo thứ tự mã ở cột B: 3 mã = PVP, PVE, Change Mode | 2 mã = PVP, PVE
+    if(bases.length===3)return ['PVP','PVE','Change Mode'];
+    if(bases.length===2)return ['PVP','PVE'];
+  }
   if(/\bp90\b/i.test(name||'')){   // P90-Frenzy (2 mã): PVP, PVE | P90-Wild Shot (4 mã): PVP, PVP Dual, PVE, PVE Charged
     if(/frenzy/i.test(name)&&bases.length===2)return ['PVP','PVE'];
     if(/wild\s*shot/i.test(name)&&bases.length===4)return ['PVP','PVP Dual','PVE','PVE Charged'];
@@ -641,7 +654,7 @@ function cardHtml(s){
     rs = `<div class="rsel${s.regions.length > 5 ? ' multi' : ''}">${rows.join('')}</div>`;
   }
   return `<div class="card setcard" data-i="${SETS.indexOf(s)}">
-    <div class="thumb">${imgTag(pr.code, pr.hints)}${badgesTag(s.badges, 'tr')}</div>
+    <div class="thumb">${imgTag(pr.code, pr.hints)}${badgesTag(cardBadges(s.badges), 'tr')}</div>
     ${rs}<div class="name">${html(s.name)}</div></div>`;
 }
 function fitRegions(root){
@@ -710,7 +723,7 @@ function memberCard(m, i){
     for (let k = 0; k < labels.length; k += 5) rows.push('<div class="rrow">' + labels.slice(k, k + 5).map((l, j) => btn(l, k + j)).join('') + '</div>');
     vs = `<div class="rsel${labels.length > 5 ? ' multi' : ''}">${rows.join('')}</div>`;
   }
-  return `<div class="card item" data-k="${i}"${m.probe ? ' data-probe="1"' : ''}><div class="thumb">${imgTag(v.code, info.hints)}${badgesTag(info.badges)}</div>${vs}<div class="name">${html(info.name)}</div></div>`;
+  return `<div class="card item" data-k="${i}"${m.probe ? ' data-probe="1"' : ''}><div class="thumb">${imgTag(v.code, info.hints)}${badgesTag(cardBadges(info.badges))}</div>${vs}<div class="name">${html(info.name)}</div></div>`;
 }
 function renderPop(){
   const set = popSet;
@@ -753,7 +766,7 @@ function openDetail(i){
   const codes = [...new Set(m.vars.flatMap(v => v.w ? v.w.codes : [v.code]).filter(Boolean))];   // mọi mã ảnh của vũ khí (như dải System Name ở trang Weapon)
   const paint = () => {
     const v = m.vars[cur] || m.vars[0], info = varInfo(m, v);
-    $('dtitle').textContent = info.name;
+    $('dtitle').innerHTML = html(info.name) + (info.badges && info.badges.length ? '<span class="dbdg">' + info.badges.map(b => { const [first, ...rest] = badgeList(b); return `<img class="bd" src="${attr(first)}" alt="${attr(b)}" title="${attr(b)}" data-alts="${attr(JSON.stringify(rest))}" onerror="__fb(this)">`; }).join('') + '</span>' : '');   // tên + thẻ BADGES
     $('dreg').innerHTML = '<table>' + CONFIG.POPUP_REGIONS.map(n => {
       const r = info.regions.find(x => norm(x.label).trim() === norm(n));
       const has = r && r.html;
