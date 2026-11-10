@@ -53,7 +53,8 @@ label.chk{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
 .pager .on{background:var(--accent);color:#fff;border-color:var(--accent)}
 #tip{position:fixed;z-index:50;pointer-events:none;background:rgba(40,40,40,.94);color:#fff;border-radius:6px;padding:10px 14px;font-size:12.5px;line-height:1.7;display:none;max-width:420px}
 #tip table{border-collapse:collapse}
-#tip tr.rm td{color:#9a9a9a;text-decoration:line-through}
+#tip tr.rm td{color:#9a9a9a}
+#tip tr.rm td:last-child{text-decoration:line-through}   /* tên khu vực: chỉ làm mờ; chữ Removed/tên vũ khí: mờ + gạch ngang */
 #tip s{text-decoration:line-through}
 #tip .tip-ids{color:#fbdf89;font-weight:700;margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid rgba(251,223,137,.35);word-break:break-all}
 .name s{text-decoration:line-through}
@@ -87,7 +88,8 @@ label.chk{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
 #pop .preg td{vertical-align:top;padding:0;white-space:nowrap}
 #pop .preg td:first-child{text-align:right;white-space:nowrap}
 #pop .preg td.sep{padding:0 12px;color:var(--sub)}
-#pop .preg tr.rm td{color:var(--sub);text-decoration:line-through}
+#pop .preg tr.rm td{color:var(--sub)}
+#pop .preg tr.rm td:last-child{text-decoration:line-through}   /* tên khu vực (K–W): chỉ làm mờ, không gạch ngang */
 #pop .preg s{text-decoration:line-through}
 #pop .pyl{width:0;min-width:100%;box-sizing:border-box;background:#000;color:#fbdf89;padding:12px 22px;font-size:14px;line-height:1.7;text-align:left;word-break:break-all}
 #pop .pyl .lb{color:#fff}
@@ -103,6 +105,10 @@ label.chk{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
 #modal.on{display:flex}
 #modal .box{position:relative;width:min(800px,92vw,calc(80vh*4/3));aspect-ratio:4/3;background:var(--scope-bg)}
 #modal .box img{width:100%;height:100%;object-fit:contain;display:block}
+#modal .mtg{position:absolute;left:0;right:0;top:100%;margin-top:10px;display:flex;gap:6px;justify-content:center}
+#modal .mtg:empty{display:none}
+#modal .mtg button{min-width:34px;padding:4px 10px;border:1px solid #8fa0cf;border-radius:3px;background:#2c3e75;color:#fff;font-weight:600}
+#modal .mtg button.on{background:#fbdf89;color:#111;border-color:#fbdf89}
 #modal .x{position:absolute;top:-38px;right:-2px;color:#fff;font:700 26px/1 'Lexend',sans-serif;cursor:pointer;user-select:none}
 #msg{text-align:center;color:var(--sub);padding:30px;font-size:14px}
 #msg.err{color:#d4380d}
@@ -128,7 +134,7 @@ label.chk{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
 <div id="pop"><div class="pbox"><div class="phd" id="ptitle"></div><span class="px" id="pclose">&times;</span><div class="pbd"><div class="pleft"><div class="ppic" id="ppic"></div><div class="tgl" id="ptgl"></div></div><div class="preg" id="preg"></div></div><div class="pyl" id="pyl"></div></div></div>
 <div class="cbl" id="cbl"></div>
 <div id="sp"></div>
-<div id="modal"><div class="box"><div id="mimg"></div><span class="x" id="mx">X</span></div></div>
+<div id="modal"><div class="box"><div id="mimg"></div><span class="x" id="mx">X</span><div class="mtg" id="mtg"></div></div></div>
 
 <!-- data.js: giữ nguyên, không chỉnh sửa. Nếu file có khai báo SHEET_ID / SHEET_GID thì sẽ được dùng; nếu có mảng dữ liệu thì dùng làm dự phòng khi không tải được Sheet. -->
 <script src="data.js" onerror="void 0"></script>
@@ -151,7 +157,13 @@ const CFG = {
   // Ô cột F (SCOPE) ghi tên file scope, vd AWM_RedFrameHawk_Scope. Ô trống => tra SCOPE_DATA bên dưới theo mã cột B (IMAGE). Không có => không hiện nút SCOPE.
   SCOPE_DIRS: ['img/SCOPE/',
                '../skin/img/SCOPE/'],
-  SCOPE_EXTS: ['.png','.webp','.jpg','.PNG'],
+  SCOPE_EXTS: ['.png'],   // đuôi file scope (tất cả scope hiện có đều .png; thêm '.jpg' nếu cần)
+  // TỰ NHẬN SCOPE (không cần điền cột F): trang tự tìm file theo mã cột B (bỏ BUYWEAPON_INFO_), không phân biệt hoa/thường:
+  //   <mã>_Scope.png, <mã>_Scope2.png, <mã>_Scope_2.png
+  // => Muốn khẩu nào có SCOPE chỉ cần chép hình đặt đúng tên vào weapon/img/SCOPE/. Có nhiều hình (Scope + Scope2) thì cửa sổ SCOPE có nút 1, 2.
+  // Cột F điền tay: ghi tên trước _Scope (vd AWM_RedFrameHawk_Ink) hoặc tên file đầy đủ. Ô F có chữ thì dùng đúng ô F, bỏ qua tự nhận.
+  SCOPE_STRICT: true,    // true = chỉ nhận scope theo cột F hoặc mã cột B trùng tên file (đúng quy tắc). false = đoán thêm (bỏ _NM, bảng SCOPE_DATA)
+  SCOPE_FAMILY: false,   // true = khẩu không có scope riêng thì dùng scope chung của dòng (vd M200CheyTac_Balance2025 -> M200CheyTac_Scope)
   // Hình có thể nằm trong thư mục con của Img/ (vd Img/RIFLE/, Img/SNIPER/). Trang tự thử: thư mục trùng với cột TYPE (C) / CATEGORIZED (D)
   // của dòng đó trước, rồi thư mục gốc Img/, rồi các thư mục trong danh sách dưới đây. Thêm tên thư mục mới vào đây nếu cần.
   IMG_SUBDIRS: ['RIFLE','SNIPER','SMG','SHOTGUN','MG','PISTOL','MELEE','GRENADE','FLASHBANG','SMOKE'],
@@ -200,7 +212,7 @@ const CFG = {
   CLOSED_FROM: 15,   // chỉ tiêu đề cột P (=15) trở đi (P–W) mà bị gạch ngang trong Sheet mới tính là khu vực đóng "(Closed)"
   REMOVED_WORDS: ['Removed','Closed'],   // từ đánh dấu ngừng hoạt động trong ô khu vực (thêm từ khác nếu cần, vd 'Đã gỡ')
   POPUP_REGIONS: ['China','Vietnam','Brazil','West','Philippines'],   // 5 dòng khu vực trong popup (đúng tên cột khu vực trong Sheet)
-  HOVER_TIP: false,   // true = bật lại tooltip khu vực khi rê chuột vào thẻ
+  HOVER_TIP: true,    // true = bật lại tooltip khu vực khi rê chuột vào thẻ
   PER_PAGE: 20,
   // Menu CLASS (cột F → G) và SPECIAL (cột H). Sửa tại đây nếu cần.
   CLASS_LABEL: 'CLASS',
@@ -219,7 +231,7 @@ const CFG = {
   // Khoá Google Sheets API (miễn phí) - cần nếu muốn (1) web nhận định dạng GẠCH NGANG thật của ô (cột J–V) và (2) bộ lọc "Create a filter" trong Sheet KHÔNG làm mất dòng trên web.
   // Có khoá thì web đọc toàn bộ dữ liệu bằng Sheets API (bỏ qua bộ lọc). Không có khoá thì đọc qua gviz: dòng bị bộ lọc ẩn sẽ không hiện (dùng "Filter views" thì không sao).
   // Để trống '' thì web chỉ nhận chữ gạch ngang kiểu Unicode (R̶u̶s̶s̶i̶a̶) và chữ "Removed". Xem hướng dẫn tạo khoá trong tin nhắn.
-  API_KEY: '',
+  API_KEY: 'AIzaSyDQvM2kN1P3HgT2mhzNYmTpCIUm-Ay5IiA',
   // Tự điền tên khu vực (cột K–O) từ thư mục "ITEMCFT WORLD" (file regions.json do Cloudflare tạo khi build). Để '' để tắt.
   // Ô có chữ trong Sheet luôn được ưu tiên; ô trống mới tự điền; ghi "-" vào ô = khu vực đó không có.
   AUTO_REGIONS: 'regions.json',
@@ -361,17 +373,70 @@ const SCOPE_DATA = {
   "ScorpionEVO3A1_Elite_NM": "EVO3A1_S_Elite_Scope"
 };
 const SCOPE_IDX = Object.fromEntries(Object.entries(SCOPE_DATA).map(([k,v])=>[k.toLowerCase(),v]));
+/* Trả về danh sách NHÓM tên file scope cần thử (theo thứ tự ưu tiên). Nhóm đầu tiên có ít nhất 1 hình tồn tại sẽ được dùng. */
+const SC_SUF=['_Scope','_Scope2','_Scope_2'];
+/* Nhận diện scope:
+   1) Cột F (điền tay): ghi TÊN trước _Scope (vd AWM_RedFrameHawk_Ink) hoặc tên file đầy đủ (vd AWM_RedFrameHawk_Ink_Scope2.png) đều được.
+      Trang tìm <tên>_Scope, <tên>_Scope2, <tên>_Scope_2. Nhiều tên cách nhau bằng dấu phẩy.
+   2) Cột F trống: mã cột B (sau BUYWEAPON_INFO_) phải TRÙNG với phần tên trước _Scope của file (không phân biệt hoa/thường, Scope hay Scope2).
+   SCOPE_STRICT:false thì dùng thêm cách đoán cũ (bỏ đuôi _NM, bảng SCOPE_DATA). */
+const scBase=x=>x.replace(/\.(png|jpg|jpeg|webp)$/i,'').replace(/_Scope(_?\d+)?$/i,'');
 function scopeOf(r,imgs){
-  const v=String(r[CFG.COL.scope]||'').split(/[,;\n|]+/).map(x=>x.trim()).filter(Boolean)[0];
-  if(v)return v.replace(/\.(png|jpg|jpeg|webp)$/i,'');
-  for(const t of imgs){
-    const k=t.split(/[\\/]/).pop().replace(/\.(png|jpg|jpeg|webp)$/i,'').replace(/^.*?BUYWEAPON_INFO_/i,'').toLowerCase();
-    if(SCOPE_IDX[k])return SCOPE_IDX[k];
+  const strip=x=>x.replace(/\.(png|jpg|jpeg|webp)$/i,'');
+  const G=[],seen=new Set(),add=g=>{g=g.filter(x=>{const k=x.toLowerCase();if(seen.has(k))return false;seen.add(k);return true});if(g.length)G.push(g)};
+  const f=String(r[CFG.COL.scope]||'').split(/[,;\n|]+/).map(x=>x.trim()).filter(Boolean);
+  if(f.length){add(f.flatMap(x=>[strip(x),...SC_SUF.map(s=>scBase(x)+s)]));return G}   // cột F: chỉ dùng tên điền tay
+  const codes=[...new Set(imgs.map(t=>strip(t.split(/[\\/]/).pop()).replace(/^.*?BUYWEAPON_INFO_/i,'')).filter(Boolean))];
+  codes.forEach(c=>add(SC_SUF.map(s=>c+s)));                                   // mã cột B = tên trước _Scope
+  if(!CFG.SCOPE_STRICT){
+    codes.forEach(c=>{const c2=c.replace(/_nm$/i,'');if(c2!==c)add(SC_SUF.map(s=>c2+s))});
+    codes.forEach(c=>{const v=SCOPE_IDX[c.toLowerCase()];if(v)add([v])});
   }
-  return '';
+  if(CFG.SCOPE_FAMILY)codes.forEach(c=>{
+    const t=c.replace(/_nm$/i,'').split(/(?<=[-_])/);
+    for(let n=t.length-1;n>0;n--)add([t.slice(0,n).join('').replace(/[-_]+$/,'')+'_Scope']);
+  });
+  return G;
 }
 const scopeSrcList=v=>CFG.SCOPE_DIRS.flatMap(d=>CFG.SCOPE_EXTS.map(e=>d+encodeURIComponent(v)+e));
-const scopeBtn=r=>r&&r.scope?`<button type="button" class="scopebtn" data-s="${esc(r.scope)}">SCOPE</button>`:'';
+/* Kiểm tra hình scope có tồn tại không: có manifest.json (Cloudflare) thì tra trong đó, không thì thử tải hình (chạy cả khi mở file trên máy). */
+const SC_CACHE=new Map();
+let SC_MAN=null;
+function scFind(name){
+  const key=name.toLowerCase();
+  if(SC_CACHE.has(key))return SC_CACHE.get(key);
+  if(SC_MAN===null)SC_MAN=Object.keys(MAN).some(k=>/(^|\/)img\/scope\//.test(k));
+  const urls=scopeSrcList(name),p=(async()=>{
+    let rest=urls;
+    if(SC_MAN){
+      for(const u of urls){const k=decodeURIComponent(u).toLowerCase();if(MAN[k])return MAN[k]}
+      rest=urls.filter(u=>/^\.\.\//.test(u));                                   // thư mục ngoài weapon/ (vd ../skin) không có trong manifest
+    }
+    for(const u of rest){
+      const ok=await new Promise(res=>{const im=new Image();im.onload=()=>res(true);im.onerror=()=>res(false);im.src=u});
+      if(ok)return u;
+    }
+    return '';
+  })();
+  SC_CACHE.set(key,p);return p;
+}
+async function scResolve(groups){
+  for(const g of groups){
+    const found=(await Promise.all(g.map(scFind))).filter(Boolean);
+    if(found.length)return found;
+  }
+  return [];
+}
+/* Nút SCOPE ban đầu ẩn; fillScopes() tìm hình rồi mới hiện nút (khẩu không có hình scope => không có nút). */
+const scopeBtn=r=>r&&r.scope&&r.scope.length?`<button type="button" class="scopebtn" data-r="${ROWS.indexOf(r)}" hidden>SCOPE</button>`:'';
+function fillScopes(box){
+  box.querySelectorAll('.scopebtn[hidden][data-r]').forEach(async b=>{
+    const r=ROWS[+b.dataset.r];if(!r)return;
+    if(!r._sc)r._sc=scResolve(r.scope);
+    const list=await r._sc;
+    if(list.length&&b.isConnected){b.dataset.s=JSON.stringify(list);b.hidden=false}
+  });
+}
 
 /* ================= TẢI SHEET (JSONP, chạy được cả file:// ) ================= */
 let __gsN=0;
@@ -388,6 +453,43 @@ function loadSheet(ref,headers){
   });
 }
 const cellStr=c=>c==null||c.v==null?'':String(c.f!=null&&typeof c.v==='number'?c.f:c.v).trim();
+
+/* ===== Đọc tab bằng link xuất CSV (export?format=csv&gid=...) =====
+   Cách này lấy TOÀN BỘ dòng của tab, KHÔNG bị bộ lọc ("Create a filter") trong Google Sheets làm ẩn dòng,
+   nên bạn lọc trong Sheet thoải mái, F5 trang web vẫn đủ dữ liệu. Cần gid (số sau #gid= trên URL của tab).
+   Nếu không đọc được (mạng chặn...) thì tự quay về cách đọc gviz cũ. */
+function parseCSV(t){
+  const out=[];let row=[],f='',q=false;
+  for(let i=0;i<t.length;i++){
+    const ch=t[i];
+    if(q){if(ch==='"'){if(t[i+1]==='"'){f+='"';i++}else q=false}else f+=ch;continue}
+    if(ch==='"')q=true;
+    else if(ch===','){row.push(f);f=''}
+    else if(ch==='\n'||ch==='\r'){if(ch==='\r'&&t[i+1]==='\n')i++;row.push(f);out.push(row);row=[];f=''}
+    else f+=ch;
+  }
+  if(f!==''||row.length){row.push(f);out.push(row)}
+  return out;
+}
+async function loadCsv(gid){
+  const u=`https://docs.google.com/spreadsheets/d/${CFG.SHEET_ID}/export?format=csv&gid=${encodeURIComponent(gid)}&_=${Date.now()}`;
+  const r=await fetch(u,{cache:'no-store'});
+  if(!r.ok)throw new Error('CSV gid '+gid+': HTTP '+r.status);
+  const txt=await r.text();
+  if(/^\s*</.test(txt))throw new Error('CSV gid '+gid+': Sheet chưa chia sẻ công khai');
+  const L=CFG.COL.regionTo+1,all=parseCSV(txt.replace(/^﻿/,''));
+  const pad=a=>{const o=[];for(let i=0;i<L;i++)o.push(String(a[i]==null?'':a[i]).trim());return o};
+  if(!all.length)throw new Error('CSV gid '+gid+': trống');
+  return {headers:pad(all[0]),rows:all.slice(1).map(pad).filter(x=>x.some(Boolean))};
+}
+async function loadTab(ref){
+  ref=String(ref).trim();
+  const gid=/^\d+$/.test(ref)?ref:(TAB_GID[ref.toLowerCase()]||'');
+  if(gid){try{return await loadCsv(gid)}catch(e){console.warn('[CSV] '+e.message+' -> dùng gviz')}}
+  else console.warn('[CSV] tab "'+ref+'" chưa có gid -> đọc gviz (dòng bị bộ lọc trong Sheet có thể bị ẩn). Ghi gid vào cột B của tab TABS.');
+  return parseTable(await loadSheet(gid||ref));
+}
+const TAB_GID={};   // tên tab (chữ thường) -> gid, lấy từ cột B của tab TABS
 
 function parseTable(t){
   let headers=t.cols.map(c=>(c.label||'').trim());
@@ -693,7 +795,7 @@ function buildEntries(list){
 }
 $('grid').addEventListener('click',e=>{
   const sb=e.target.closest('.scopebtn');
-  if(sb){openScope(sb.dataset.s);return}
+  if(sb){if(sb.dataset.s)openScope(JSON.parse(sb.dataset.s));return}
   if(e.target.closest('.tgl')&&!e.target.closest('.tgl button'))return;
   const b=e.target.closest('.tgl button');
   if(!b){                                              // bấm vào thẻ => mở popup
@@ -710,6 +812,7 @@ $('grid').addEventListener('click',e=>{
     it.querySelector('.name>span').innerHTML=titleHTML(row);
     it.querySelector('.badges').innerHTML=row.badges.map(x=>imgTag(badgeSrcList(x),'b',x)).join('');
     it.querySelectorAll('.tgl button').forEach(x=>x.classList.toggle('on',x===b));
+    fillScopes(it);
     return;
   }
   const img=it.querySelector('img.w');
@@ -984,6 +1087,7 @@ function render(){
       </div>`;
   }).join('');
   [...$('grid').children].forEach((el,k)=>{el._g=slice[k].members?slice[k]:null});
+  fillScopes($('grid'));
   // pager
   let p=`<button id="pPrev" ${state.page<=1?'disabled':''}>‹</button>`;
   const show=new Set([1,pages,state.page-1,state.page,state.page+1].filter(x=>x>=1&&x<=pages));
@@ -994,6 +1098,7 @@ function render(){
   $('pPrev').onclick=()=>{state.page--;render()};$('pNext').onclick=()=>{state.page++;render()};
   document.querySelectorAll('.pg').forEach(b=>b.onclick=()=>{state.page=+b.dataset.p;render()});
   $('pGo').onclick=()=>{state.page=Math.min(pages,Math.max(1,+$('pj').value||1));render()};
+  $('pj').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('pGo').click()}};   // gõ số rồi Enter = bấm Go
 }
 
 /* ================= TOOLTIP THEO KHU VỰC ================= */
@@ -1001,7 +1106,7 @@ const tip=$('tip'),sp=$('sp');
 function showScopePreview(btn,e){
   if(sp.dataset.cur!==btn.dataset.s){
     sp.dataset.cur=btn.dataset.s;
-    sp.innerHTML=imgTag(scopeSrcList(btn.dataset.s),'sw','scope')||'<div class="noimg">(no image)</div>';
+    sp.innerHTML=`<img class="sw" src="${esc(JSON.parse(btn.dataset.s)[0])}" alt="scope">`;
   }
   sp.style.display='block';
   const w=240,h=180;
@@ -1011,7 +1116,7 @@ function showScopePreview(btn,e){
 }
 $('grid').addEventListener('mousemove',e=>{
   const sb=e.target.closest('.scopebtn');
-  if(sb){tip.style.display='none';showScopePreview(sb,e);return}
+  if(sb){tip.style.display='none';if(sb.dataset.s)showScopePreview(sb,e);return}
   sp.style.display='none';
   tip.style.display='none';
   if(!CFG.HOVER_TIP)return;   // tooltip khu vực đã tắt (HOVER_TIP:true để bật lại)
@@ -1021,8 +1126,8 @@ $('grid').addEventListener('mousemove',e=>{
   const rows=REGIONS.map((g,i)=>r.reg[i]?`<tr${r.rm[i]?' class="rm"':''}><td>${esc(g.name)}</td><td>${regHTML(r,i)}</td></tr>`:'').join('');
   const ids=[...new Set((r.members?r.members.flatMap(m=>m.row.imgs||[]):(r.imgs||[])).filter(Boolean))];   // nhận diện = cột B, bỏ phần đứng trước BUYWEAPON_INFO_
   const idsHTML=ids.length?`<div class="tip-ids"${rows?'':' style="margin:0;padding:0;border:0"'}>${ids.map(x=>esc(x.split(/[\\/]/).pop().replace(/\.(png|jpg|jpeg|webp)$/i,'').replace(/^.*?BUYWEAPON_INFO_/i,''))).join('<br>')}</div>`:'';
-  if(!rows&&!idsHTML){tip.style.display='none';return}
-  tip.innerHTML=idsHTML+(rows?`<table>${rows}</table>`:'');
+  if(!rows){tip.style.display='none';return}   // chỉ hiện khu vực + tên ở khu vực đó (không hiện mã hình)
+  tip.innerHTML=`<table>${rows}</table>`;
   tip.style.display='block';
   let x=e.clientX+16,y=e.clientY+16;
   const w=tip.offsetWidth,h=tip.offsetHeight;
@@ -1033,12 +1138,15 @@ $('grid').addEventListener('mousemove',e=>{
 $('grid').addEventListener('mouseleave',()=>{tip.style.display='none';sp.style.display='none'});
 
 /* ================= CỬA SỔ SCOPE (bấm nút SCOPE) ================= */
-function openScope(name){
+function openScope(list){
   sp.style.display='none';tip.style.display='none';
-  $('mimg').innerHTML=imgTag(scopeSrcList(name),'sw','scope')||'<div class="noimg">(no image)</div>';
+  const show=k=>{$('mimg').innerHTML=`<img class="sw" src="${esc(list[k])}" alt="scope">`;$('mtg').querySelectorAll('button').forEach((b,j)=>b.classList.toggle('on',j===k))};
+  $('mtg').innerHTML=list.length>1?list.map((_,k)=>`<button type="button" data-k="${k}">${k+1}</button>`).join(''):'';
+  $('mtg').onclick=e=>{const b=e.target.closest('button');if(b)show(+b.dataset.k)};
+  show(0);
   $('modal').classList.add('on');
 }
-function closeScope(){$('modal').classList.remove('on');$('mimg').innerHTML=''}
+function closeScope(){$('modal').classList.remove('on');$('mimg').innerHTML='';$('mtg').innerHTML=''}
 $('mx').onclick=closeScope;
 $('modal').addEventListener('click',e=>{if(e.target===$('modal'))closeScope()});
 
@@ -1092,7 +1200,7 @@ document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;if($('modal')
    - Ô khu vực trong Sheet có chữ  => luôn dùng chữ trong Sheet (sửa tay trong Sheet là thắng).
    - Ô trống                       => tự lấy tên từ file Item??.csv của khu vực đó.
    - Ô ghi "-"                     => khu vực đó KHÔNG có vũ khí này, không tự điền.
-   Cách nhận diện vũ khí: so tên các ô khu vực đã có (và cột A) với tên trong file CSV -> ra mã _ItemIndexInBute -> lấy tên ở khu vực khác.
+   Cách nhận diện vũ khí: (1) mã cột B khớp BigIconName/StandardName trong BF005 WORLD (chính xác nhất); (2) so tên các ô khu vực đã có (và cột A) với tên trong file CSV -> ra mã _ItemIndexInBute -> lấy tên ở khu vực khác.
    Nếu cùng 1 vũ khí có 2 dòng (vd bản Trung Quốc và bản _NM), dòng nào đã có tên ở khu vực đó thì dòng kia không bị điền thêm. */
 const AUTO_NORM = s => String(s || '').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
 const AUTO_BLANK = /^[\s\-–—]+$/;
@@ -1132,6 +1240,26 @@ function autoFillRegions(headers, rows, data, opt) {
       const hit = idx[r].get(AUTO_NORM(v.replace(/\(?\b(removed|closed)\b\)?/gi, '')));
       if (hit) hit.forEach(k => { add(k, 3); mark(k, r) });   // tên đã ghi trong Sheet: tín hiệu mạnh nhất
     }
+    // BF005: mã cột B = BigIconName / StandardName -> WeaponIndex (chính xác nhất, theo từng khu vực)
+    const icon = new Map(), codesB = String(row[imgCol] || '').split(/[,;\n|]+/).map(t => t.trim().replace(/\.(png|jpe?g|webp)$/i, '').replace(/^.*?BUYWEAPON_INFO_/i, '').toLowerCase()).filter(Boolean);
+    for (const { r } of cols) {
+      const m = data.icon && data.icon[r]; if (!m) continue;
+      const ks = new Set(); codesB.forEach(c => (m[c] || []).forEach(k => ks.add(k)));
+      // mã có đuôi khu vực (vd AK47-Halloween_WEBR = bản West + Brazil): mã này không có trong BF005 của KHU VỰC NÀO thì dùng mã gốc,
+      // chỉ cho đúng khu vực ghi ở đuôi (mã có ở 1 khu vực, vd Wukong_..._BR = màu Brown, thì không áp dụng)
+      if (!ks.size && !codesB.some(c => cols.some(({ r: q }) => data.icon && data.icon[q] && data.icon[q][c]))) codesB.forEach(c => {
+        const sm = c.match(/^(.+?)_((?:cn|vn|br|we|ph)+)$/); if (!sm) return;
+        const rc = { China: 'cn', Vietnam: 'vn', Brazil: 'br', West: 'we', Philippines: 'ph' }[r];
+        if (rc && sm[2].match(/../g).includes(rc)) (m[sm[1]] || []).forEach(k => ks.add(k));
+      });
+      if (ks.size) icon.set(r, [...ks]);
+    }
+    // Mã nội bộ (_NAME trong ItemXX.csv) trùng mã cột B (hoặc bỏ đuôi _NM): dùng khi BF005 không có (vd skin dạng F bên China)
+    const byCode = new Map();
+    for (const { r } of cols) {
+      const m = data.code && data.code[r]; if (!m || icon.has(r)) continue;
+      for (const c of codesB) { const hit = m[c] || m[c.replace(/_nm$/, '')]; if (hit) { byCode.set(r, hit[0]); break } }
+    }
     // tên hình cột B (bỏ BUYWEAPON_INFO_) thường trùng tên nội bộ _NAME trong CSV (yếu hơn cột A vì 1 hình có thể dùng chung nhiều dòng)
     String(row[imgCol] || '').split(/[,;\n|]+/).map(t => t.trim().replace(/^.*?BUYWEAPON_INFO_/i, '')).filter(Boolean).forEach(im => {
       const hits = new Map();   // mã -> số khu vực khớp
@@ -1148,7 +1276,12 @@ function autoFillRegions(headers, rows, data, opt) {
     }
     const keys = [...score.entries()].sort((x, y) => y[1] - x[1] || cover(y[0]) - cover(x[0]) || (+x[0]) - (+y[0])).map(x => x[0]);
     const best = keys.length ? score.get(keys[0]) : 0;
-    return { keys: keys.filter(k => score.get(k) === best), all: keys, ev, blocked };
+    const iscore = new Map(score);   // điểm có cộng BF005 (dùng để chọn giữa các mã BF005)
+    icon.forEach(ks => ks.forEach(k => iscore.set(k, (iscore.get(k) || 0) + 4)));
+    // tên cột A trùng y hệt 1 tên trong khu vực (vd "AK47-B" dùng chung hình AK-47) => ưu tiên hơn BF005
+    const exact = new Map(), za = AUTO_NORM(nm);
+    if (za) for (const { r } of cols) { const h = idx[r].get(za); if (h) exact.set(r, [...h]) }
+    return { keys: keys.filter(k => score.get(k) === best), all: keys, ev, blocked, icon, score: iscore, exact, byCode };
   });
 
   // 2) nhóm cặp dòng bản thường / bản _NM (tên hình chỉ khác đuôi _NM)
@@ -1165,20 +1298,25 @@ function autoFillRegions(headers, rows, data, opt) {
   rows.forEach((row, n) => {
     const x = info[n];
     for (const i of x.blocked) row[i] = '';
-    if (!x.keys.length) { unresolved++; return }
+    if (!x.keys.length && !x.icon.size && !x.byCode.size) { unresolved++; return }
     const grp = groups.get(find(n));
     for (const { i, r } of cols) {
       if (val(row, i) || x.blocked.has(i)) continue;
-      if (grp.length > 1) {
+      if (grp.length > 1 && !x.icon.has(r)) {   // có khớp BF005 ở khu vực này thì điền luôn, không nhường cho dòng anh em (_NM)
         if (grp.some(m => m !== n && (val(rows[m], i) || info[m].blocked.has(i)))) continue;   // dòng anh em đã có tên khu vực này
         const isNM = m => /_nm(\b|_|$)/i.test(String(rows[m][imgCol] || ''));
         const pref = grp.filter(m => r === 'China' ? !isNM(m) : isNM(m));
         if ((pref.length ? pref[0] : grp[0]) !== n) continue;
       }
       // mã chính; nếu khu vực này không có thì chỉ dùng mã phụ đã khớp tên NGAY TRONG khu vực này (tránh lấy nhầm vũ khí khác)
-      const k = x.keys.find(k => regs[r][k]) || x.all.find(k => regs[r][k] && x.ev.get(k) && x.ev.get(k).has(r));
-      if (!k) continue;
-      row[i] = regs[r][k][0];
+      // có khớp BF005 ở khu vực này => chọn trong các mã BF005 (điểm cao nhất, hoà thì mã nhỏ nhất); không có => cách cũ
+      const top = a => a && a.slice().sort((p, q) => (x.score.get(q) || 0) - (x.score.get(p) || 0) || (+p) - (+q)).find(k => regs[r][k]);
+      const ik = x.icon.get(r);
+      const k = top(x.exact.get(r)) || (ik && ik.slice().sort((a, b) => (x.score.get(b) || 0) - (x.score.get(a) || 0) || (+a) - (+b)).find(k => regs[r][k]))
+        || x.keys.find(k => regs[r][k]) || x.all.find(k => regs[r][k] && x.ev.get(k) && x.ev.get(k).has(r));
+      const nmC = !x.exact.get(r) && !ik && x.byCode.get(r);   // mã nội bộ ưu tiên hơn cách đoán theo tên
+      if (!k && !nmC) continue;
+      row[i] = nmC || regs[r][k][0];
       (row.auto || (row.auto = new Set())).add(i);
       filled++;
     }
@@ -1219,7 +1357,7 @@ function dataJsFallback(){
       try{
         let col=null;
         if(CFG.API_KEY){try{const g=await loadStrikes([CFG.TAB_LIST]);if(g[0])col=g[0].map(rw=>{const c=rw&&rw.values&&rw.values[0];return c&&c.formattedValue!=null?String(c.formattedValue).trim():''})}catch(e){}}   // đọc bằng API: không bị bộ lọc
-        if(!col){const t=await loadSheet(CFG.TAB_LIST,0);col=t.rows.map(r=>cellStr(r.c&&r.c[0]))}
+        if(!col){const t=await loadSheet(CFG.TAB_LIST,0);col=t.rows.map(r=>{const a=cellStr(r.c&&r.c[0]),b=cellStr(r.c&&r.c[1]);if(a&&/^\d+$/.test(b))TAB_GID[a.toLowerCase()]=b;return a})}   // cột A = tên tab, cột B = gid (để đọc CSV không bị bộ lọc)
         const names=col.filter(x=>x&&!x.startsWith('#')&&x.toLowerCase()!==CFG.TAB_LIST.toLowerCase());
         if(names.length&&names.length<=40)refs=[...new Set(names)];
       }catch(e){}
@@ -1235,10 +1373,10 @@ function dataJsFallback(){
         okIdx=got.map(x=>x.i);bad=refs.filter((_,i)=>!okIdx.includes(i));
       }catch(e){ok=null;stNote=' · Không đọc được bằng Sheets API ('+e.message+'), đang dùng cách đọc thường - dòng bị bộ lọc ẩn trong Sheet có thể không hiện'}
     }
-    if(!ok){                                            // không có khoá API (hoặc API lỗi): đọc qua gviz như cũ
-      const res=await Promise.allSettled(refs.map(r=>loadSheet(r)));
+    if(!ok){                                            // không có khoá API (hoặc API lỗi): đọc bằng link CSV (không bị bộ lọc), lỗi thì gviz
+      const res=await Promise.allSettled(refs.map(r=>loadTab(r)));   // ưu tiên CSV (không bị bộ lọc), lỗi thì gviz
       okIdx=res.map((x,i)=>x.status==='fulfilled'?i:-1).filter(i=>i>=0);
-      ok=okIdx.map(i=>parseTable(res[i].value));
+      ok=okIdx.map(i=>res[i].value);
       if(!ok.length)throw res[0].reason;
       bad=refs.filter((_,i)=>res[i].status==='rejected');
     }
