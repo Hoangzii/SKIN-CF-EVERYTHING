@@ -287,7 +287,9 @@ function regionsOf(r, labels, weaponName){
    - Ô ghi "-"                     => khu vực đó KHÔNG có vũ khí này, không tự điền.
    Cách nhận diện vũ khí: so tên các ô khu vực đã có (và cột A) với tên trong file CSV -> ra mã _ItemIndexInBute -> lấy tên ở khu vực khác.
    Nếu cùng 1 vũ khí có 2 dòng (vd bản Trung Quốc và bản _NM), dòng nào đã có tên ở khu vực đó thì dòng kia không bị điền thêm. */
-const AUTO_NORM = s => String(s || '').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+// Từ đồng nghĩa khi so tên (bên trái đổi thành bên phải). Thêm cặp mới nếu gặp tên viết khác nhau giữa Sheet và CSV.
+const AUTO_SYN = [['withoutthelogo','nm'],['withoutlogo','nm'],['nomark','nm'],['renovo','lenovo']];
+const AUTO_NORM = s => AUTO_SYN.reduce((t, [a, b]) => t.split(a).join(b), String(s || '').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ''));
 const AUTO_BLANK = /^[\s\-–—]+$/;
 
 function autoFillRegions(headers, rows, data, opt) {
