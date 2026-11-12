@@ -150,17 +150,16 @@ const CFG = {
   // Mỗi phần tử là gid (dãy số trên URL sau #gid=) hoặc tên tab (ví dụ 'SNIPER'). Thêm tab mới chỉ cần thêm một dòng vào đây.
   // Cách 1 (khuyên dùng): tạo 1 tab tên "TABS" trong Sheet, cột A liệt kê tên các tab (mỗi tab 1 dòng, bắt đầu từ dòng 1, không có tiêu đề;
   // đặt dấu # đầu dòng để tạm tắt). Thêm tab mới chỉ cần thêm 1 dòng ở tab TABS, KHÔNG phải sửa file này.
-  TAB_LIST: 'TABS',
+  TAB_LIST: '',   // Sheet KHÔNG có tab TABS => để trống. (Trước đây để 'TABS': Google trả về tab đầu tiên RIFLE thay vì báo lỗi; khi RIFLE đang bật bộ lọc, các dòng còn lại bị hiểu nhầm là tên tab => trang chỉ còn vài khẩu.)
   // Cách 2 (dự phòng nếu chưa có tab TABS): liệt kê tên tab hoặc gid ở đây.
   // Mọi tab vũ khí (KHÔNG có WEAPON SETS = 1723919006, tab đó dành cho trang /sets/)
   SHEETS: ['2098056846' /* RIFLE */, '953162863' /* SNIPER */, '1009811895' /* SMG */, '1975501148' /* MG */,
            '969100198' /* SHOTGUN */, '1168502877' /* PISTOL */, '750789659' /* MELEE */, '591776108' /* THROW */],
   IMG_DIR  : 'img/',
   // ---- SCOPE ----
-  // Hình scope: tìm trong weapon/img/SCOPE/ trước; không có thì tìm tiếp thư mục SCOPE của trang /skin/ (xoá dòng thứ 2 nếu chỉ muốn dùng weapon/img/SCOPE).
+  // Hình scope: CHỈ tìm trong weapon/img/SCOPE/ (không dùng thư mục SCOPE của trang /skin/ nữa).
   // Ô cột F (SCOPE) ghi tên file scope, vd AWM_RedFrameHawk_Scope. Ô trống => tra SCOPE_DATA bên dưới theo mã cột B (IMAGE). Không có => không hiện nút SCOPE.
-  SCOPE_DIRS: ['img/SCOPE/',
-               '../skin/img/SCOPE/'],
+  SCOPE_DIRS: ['img/SCOPE/'],
   SCOPE_EXTS: ['.png'],   // đuôi file scope (tất cả scope hiện có đều .png; thêm '.jpg' nếu cần)
   // TỰ NHẬN SCOPE (không cần điền cột F): trang tự tìm file theo mã cột B (bỏ BUYWEAPON_INFO_), không phân biệt hoa/thường:
   //   <mã>_Scope.png, <mã>_Scope2.png, <mã>_Scope_2.png
@@ -186,6 +185,7 @@ const CFG = {
   DEFAULT_LABELS: ['Normal','Change'],
   // Luật có merge:true sẽ GỘP nhiều dòng của Sheet thành 1 khung: các file chỉ khác nhau ở token (hoặc không có token = nút đầu/mặc định).
   VARIANT_RULES: [
+    { match:'USPMatch', tokens:['','USPMatch_S_'], labels:['Default','Silencer'] },   // USP Match có bản _S_ (giảm thanh), vd USPMatch_BornBeast + USPMatch_S_BornBeast
     { match:'_Slug', tokens:['','_BuckShot','_Slug'], labels:['Normal','Normal','Slug'] },   // shotgun có 2 mã: mã kết thúc _Slug = Slug, mã còn lại = Normal
     { match:'M249SPW', tokens:['','_Changemode','_Chg'], labels:['Normal','Shoulder Firing','Shoulder Firing'] },   // mọi khẩu M249 SPW có 2 chế độ
     { match:'M249SPW', tokens:['','_Changemode','_Chg'], labels:['Normal','Change Mode','Change Mode'] },   // mọi M249 SPW có 2 hình (Urban, Unyielding Spirit...). match = chỉ áp dụng cho tên hình có chứa đoạn này
@@ -230,7 +230,15 @@ const CFG = {
     {text:'SVIP'},                           // lọc cột F = SVIP
     {text:'NON-VVIP',type:'kw'},             // mọi vũ khí có chữ NON-VVIP ở cột F hoặc G
     {text:'NOBLE GOLD',kids:['VVIP','NON-VVIP']},  // cột F = NOBLE GOLD, mũi tên → cột G
-    {text:'FIGURINE'}                        // lọc cột F = FIGURINE
+    {text:'FIGURINE'},                       // lọc cột F = FIGURINE
+    {text:'TOURNAMENT',type:'tour'}          // mũi tên → các mục trong CFG.TOURNAMENT bên dưới
+  ],
+  // TOURNAMENT ▶ ...  col:'name' = tên cột A · col:'region' = tên ở cột K–O (5 khu vực, kể cả tên tự điền)
+  TOURNAMENT: [
+    {text:'Balance',             col:'name',   re:/\bBalance\b(\s*20(1[6-9]|2[0-6]))?/i},   // Balance, Balance 2016 … Balance 2026
+    {text:'CrossFire Star',      col:'region', re:/\(\s*Tournament\s*\)/i},   // ô K–O có ghi "(Tournament)", vd "AK47-CFS 2013 (Tournament)"
+    {text:'World Cyber Games',   col:'name',   re:/\bWCG\b(?!\s*China)/i},   // WCG nhưng KHÔNG lấy "WCG China"
+    {text:'World Esport Master', col:'name',   re:/\bWEM\b/i}
   ],
   SPECIAL_LABEL: 'SPECIAL',
   SPECIAL_BADGES: { BOLT:['PVE','NANO'] },  // mục BOLT chỉ hiện vũ khí có ĐỦ các thẻ này ở cột I (xoá dòng này nếu không cần)
@@ -696,7 +704,7 @@ function badgeSrcList(v){
   let n=v.split(/[\\/]/).pop().replace(/\.(png|jpg|jpeg|webp)$/i,'').trim();
   n=n.replace(/^tag_/i,'');
   n=(CFG.BADGE_ALIAS||{})[n.toLowerCase()]||n;
-  return ['.PNG','.png'].flatMap(e=>[CFG.BADGE_DIR+'tag_'+n+e,CFG.BADGE_DIR+'tag_'+n.toLowerCase()+e]);
+  return ['.PNG','.png'].flatMap(e=>[CFG.BADGE_DIR+'tag_'+n+e,CFG.BADGE_DIR+'tag_'+n.toLowerCase()+e,CFG.BADGE_DIR+n+e]);   // thêm: file không có tiền tố tag_ (vd RankMatch.PNG)
 }
 function fallbackImg(img){
   const list=JSON.parse(img.dataset.alts||'[]');
@@ -728,6 +736,11 @@ function normBase(v){
 }
 // Steyr TMP có 3-4 mã ở cột B: theo thứ tự trái -> phải: Normal, Dual, Mutation[, Charged] (3 mã mà mã thứ 3 là AWM/Charge => Normal, Dual, Charged)
 function tmpLabels(name,bases){
+  if(bases.some(b=>/rsh12_infection_rm/i.test(b))&&bases.length>1)return bases.map((_,k)=>'Level '+(k+1));   // RSh-12 Infection RM: Level 1 - 2 - 3 - 4 theo thứ tự mã ở cột B
+  if(/raging\s*bull/i.test(name||'')&&bases.length===2){   // Raging Bull theo thứ tự mã ở cột B
+    if(/judgement|judgment/i.test(name))return ['PVP','PVE'];
+    if(/stimulator/i.test(name))return ['Default','Astronaut'];
+  }
   if(/vepr-?\s*12/i.test(name||'')&&/rampage/i.test(name||'')&&bases.length>=2&&bases.length<=3)   // Vepr-12 Rampage: mã thường = PVP, có _PvE = PVE, có _Slug = PVE Slug (không phụ thuộc thứ tự)
     return bases.map(b=>/_slug/i.test(b)?'PVE Slug':/_pve/i.test(b)?'PVE':'PVP');
   if(/\baa-?12\b/i.test(name||'')&&!bases.some(b=>/_slug$/i.test(b))){   // AA-12 có mã _Slug (vd AA12_IronBeast + AA12_IronBeast_Slug) => để luật Slug xử lý: Normal, Slug   // AA-12 theo thứ tự mã ở cột B: 3 mã = PVP, PVE, Change Mode | 2 mã = PVP, PVE
@@ -989,12 +1002,13 @@ function makeTypeMenu(){
 /* CLASS: ALL (xoá hết bộ lọc) · NORMAL · VVIP · SVIP · NON-VVIP (từ khoá ở cột F/G) · NOBLE GOLD ▶ VVIP / NON-VVIP
    Thứ tự & nội dung sửa tại CFG.CLASS_MENU. */
 function makeClassMenu(){
-  const C=CFG.COL,none={clsF:'',clsG:'',clsKw:'',clsGKw:''};
+  const C=CFG.COL,none={clsF:'',clsG:'',clsKw:'',clsGKw:'',tour:''};
   const allF=uniq(ALLROWS.flatMap(r=>tok(r.raw[C.f]))),allG=uniq(ALLROWS.flatMap(r=>tok(r.raw[C.g])));
   const real=(list,name)=>list.find(x=>nz(x)===nz(name))||name;   // lấy đúng chữ hoa/thường như trong Sheet
   const nodes=CFG.CLASS_MENU.map(m=>{
     if(m.type==='all')return {text:m.text,sel:{reset:true}};
     if(m.type==='kw')return {text:m.text,sel:{...none,clsKw:m.text}};
+    if(m.type==='tour')return {text:m.text,must:true,kids:(CFG.TOURNAMENT||[]).map(t=>({text:t.text,sel:{...none,tour:t.text}}))};
     const f=real(allF,m.text);
     const n={text:m.text,sel:{...none,clsF:f}};
     if(m.kids)n.kids=m.kids.map(k=>{const g=real(allG,k);return {text:k,sel:{...none,clsF:f,clsG:g}}});
@@ -1002,7 +1016,7 @@ function makeClassMenu(){
     if(n.kids)n.must=true;   // mục có mũi tên (VVIP, NOBLE GOLD): bắt buộc chọn mục con, không chọn đơn
     return n;
   });
-  return makeFly(nodes,()=>F.clsKw||[F.clsF,F.clsG||F.clsGKw].filter(Boolean).join(' › ')||CFG.CLASS_LABEL,
+  return makeFly(nodes,()=>(F.tour?'TOURNAMENT › '+F.tour:'')||F.clsKw||[F.clsF,F.clsG||F.clsGKw].filter(Boolean).join(' › ')||CFG.CLASS_LABEL,
     sel=>{if(sel.reset){resetAll();return}Object.assign(F,sel)});
 }
 /* SPECIAL: cột H, lọc theo từ khoá PVE / NANO / BOLT */
@@ -1069,7 +1083,14 @@ function filtered(){
     if(F.clsKw&&!(kwHas(r.raw[K.f],F.clsKw)||kwHas(r.raw[K.g],F.clsKw)))return false;
     if(F.clsF&&!tok(r.raw[K.f]).includes(F.clsF))return false;
     if(F.clsG&&!tok(r.raw[K.g]).includes(F.clsG))return false;
-    if(F.clsGKw&&!kwHas(r.raw[K.g],F.clsGKw))return false;   // từ khoá cột G (VVIP không khớp NON-VVIP)
+    if(F.clsGKw&&!kwHas(r.raw[K.g],F.clsGKw))return false;
+    if(F.tour){                                          // TOURNAMENT ▶ Balance / CFS / WCG / WEM
+      const t=(CFG.TOURNAMENT||[]).find(x=>x.text===F.tour);
+      if(t){
+        const cells=t.col==='region'?r.raw.slice(K.regionFrom,K.regionFrom+5):[r.raw[K.name]];
+        if(!cells.some(v=>t.re.test(String(v||'').replace(/[\u0335\u0336]/g,''))))return false;   // khớp trong từng ô (bỏ gạch ngang Unicode)
+      }
+    }   // từ khoá cột G (VVIP không khớp NON-VVIP)
     if(F.spKw){
       const need=CFG.SPECIAL_BADGES[F.spKw];
       const hit=need?need.every(k=>kwHas(r.raw[K.badges],k))                                  // BOLT: thẻ cột I phải có ĐỦ cả PVE và NANO
@@ -1341,15 +1362,83 @@ function autoFillRegions(headers, rows, data, opt) {
   return { filled, unresolved };
 }
 
+/* VŨ KHÍ TÍCH HỢP: mã ở cột B của 1 dòng cũng nằm ở cột B (vị trí thứ 2 trở đi) của dòng khác => lấy tên khu vực của dòng đó.
+   Vd "Glock-18C-G Iron Wolf" (Glock18C_IronWolf) lấy tên của "M4A1-S Iron Wolf" (M4A1_S_IronWolf , Glock18C_IronWolf).
+   Ô khu vực đã ghi tay ở dòng tích hợp vẫn được giữ; chỉ thay ô trống / ô tự điền. Mã đuôi _NGB cũng khớp với _NG. */
+function inheritIntegrated(rows, opt){
+  const from = opt.from, to = opt.to, imgCol = opt.imgCol == null ? 1 : opt.imgCol;
+  const codesOf = r => String(r[imgCol] || '').split(/[,;\n|]+/).map(t => t.trim().replace(/\.(png|jpe?g|webp)$/i, '').replace(/^.*?BUYWEAPON_INFO_/i, '').toLowerCase()).filter(Boolean);
+  const owner = new Map();
+  rows.forEach(r => codesOf(r).slice(1).forEach(k => { if (!owner.has(k)) owner.set(k, r); }));
+  let n = 0;
+  rows.forEach(r => {
+    let src = null;
+    for (const k of codesOf(r)){ const s = owner.get(k) || owner.get(k.replace(/_ngb$/, '_ng')); if (s && s !== r){ src = s; break; } }
+    if (!src) return;
+    for (let i = from; i <= to; i++){
+      const v = String(src[i] == null ? '' : src[i]).trim(), cur = String(r[i] == null ? '' : r[i]).trim();
+      if (!v || (cur && !(r.auto && r.auto.has(i)))) continue;
+      r[i] = src[i]; (r.auto || (r.auto = new Set())).add(i); n++;
+    }
+  });
+  return n;
+}
+/* NHIỀU MÃ Ở CỘT B (cùng 1 loại súng, vd StimRevolver_RagingBull_Gun , StimRevolver_Astronaut):
+   tra BF005 / mã nội bộ cho TỪNG mã; ra từ 2 tên khác nhau trở lên ở 1 khu vực => ghi "Tên 1, Tên 2".
+   Chỉ áp dụng khi các mã cùng tiền tố (phần trước dấu _ đầu tiên) để không gộp vũ khí tích hợp khác loại (vd M4A1 + Glock).
+   Ô đã ghi tay trong Sheet vẫn giữ nguyên. CODE_ALIAS: mã không có món riêng trong ItemXX.csv -> mã của món chứa nó. */
+const CODE_ALIAS = {
+  stimrevolver_ragingbull_gun: 'heartstimulater',            // Stimulator Revolver nằm trong Heart Stimulator Sword
+  stimrevolver_astronaut: 'heartstimulater_astronaut'
+};
+function multiCodeNames(rows, data, opt){
+  const from = opt.from, to = opt.to, imgCol = opt.imgCol == null ? 1 : opt.imgCol, headers = opt.headers || [];
+  if (!data || !data.regions) return 0;
+  const codesOf = r => [...new Set(String(r[imgCol] || '').split(/[,;\n|]+/).map(t => t.trim().replace(/\.(png|jpe?g|webp)$/i, '').replace(/^.*?BUYWEAPON_INFO_/i, '').toLowerCase()).filter(Boolean))];
+  const cols = [];
+  for (let i = from; i <= to && i < headers.length; i++){
+    const h = String(headers[i] || '').replace(/[̵̶]/g, '').trim().toLowerCase();
+    const r = Object.keys(data.regions).find(k => k.toLowerCase() === h);
+    if (r) cols.push({i, r});
+  }
+  const nameOf = (r, c) => {
+    c = CODE_ALIAS[c] || c;
+    const regs = data.regions[r] || {}, ic = (data.icon && data.icon[r]) || {}, cd = (data.code && data.code[r]) || {};
+    for (const x of [c, c.replace(/_nm$/, '')]){
+      const ks = (ic[x] || []).filter(k => regs[k]).sort((a, b) => (+a) - (+b));
+      if (ks.length) return regs[ks[0]][0];
+      if (cd[x] && cd[x][0]) return cd[x][0];
+    }
+    return '';
+  };
+  let n = 0;
+  rows.forEach(row => {
+    const cs = codesOf(row);
+    if (cs.length < 2) return;
+    if (new Set(cs.map(c => c.split('_')[0])).size > 1) return;   // khác loại súng => không gộp
+    for (const {i, r} of cols){
+      const cur = String(row[i] == null ? '' : row[i]).trim();
+      if (cur && !(row.auto && row.auto.has(i))) continue;          // ô ghi tay: giữ
+      const names = [...new Set(cs.map(c => nameOf(r, c)).filter(Boolean))];
+      if (names.length >= 2 || (names.length === 1 && !cur)){
+        row[i] = names.join(', '); (row.auto || (row.auto = new Set())).add(i); n++;
+      }
+    }
+  });
+  return n;
+}
 let AUTO_DATA=null;
 const AUTO_P=window.REGIONS_DATA?Promise.resolve(AUTO_DATA=window.REGIONS_DATA):CFG.AUTO_REGIONS?fetch(CFG.AUTO_REGIONS,{cache:'no-cache'}).then(r=>r.ok?r.json():null).then(d=>AUTO_DATA=d).catch(()=>null):Promise.resolve(null);
 async function applyAuto(headers,rows){
   await AUTO_P;
-  if(!AUTO_DATA)return;
+  const inh=()=>{try{const n=inheritIntegrated(rows,{from:CFG.COL.regionFrom,to:CFG.COL.regionTo,imgCol:CFG.COL.image});if(n)console.log('[ITEMCFT] vũ khí tích hợp: lấy',n,'ô từ dòng chính')}catch(e){console.warn(e)}};
+  if(!AUTO_DATA){inh();return}
   try{
     const st=autoFillRegions(headers,rows,AUTO_DATA,{from:CFG.COL.regionFrom,to:CFG.COL.regionTo,nameCol:CFG.COL.name,imgCol:CFG.COL.image});
     console.log('[ITEMCFT] tự điền',st.filled,'ô; không nhận diện được',st.unresolved,'dòng; dữ liệu build lúc',AUTO_DATA.built);
   }catch(e){console.warn('[ITEMCFT] lỗi tự điền:',e)}
+  inh();
+  try{multiCodeNames(rows,AUTO_DATA,{from:CFG.COL.regionFrom,to:CFG.COL.regionTo,imgCol:CFG.COL.image,headers})}catch(e){console.warn(e)}   // nhiều mã cùng loại => "Tên 1, Tên 2"
 }
 const AUTO_SHOW=CFG.AUTO_MARK||/[?&]auto\b/.test(location.search);
 
