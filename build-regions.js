@@ -12,11 +12,18 @@ const OUT_JS = path.join(__dirname, 'weapon', 'regions.js');
 const BF_DIR = path.join(__dirname, 'BF005 WORLD');
 
 // Đọc BF005XX.lta: trả về { "mã hình viết thường": [WeaponIndex, ...] } từ BigIconName và StandardName
-function buildIcons(file) {
-  const t = fs.readFileSync(file, 'utf8'), m = {};
+// Tên trong BF005 (WeaponName): file CN viết bằng GBK, các file khác là chữ thường => thử UTF-8 trước, lỗi thì GBK
+const decName = s => {
+  const buf = Buffer.from(s, 'latin1');
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(buf).trim() } catch (e) {}
+  try { return new TextDecoder('gbk').decode(buf).trim() } catch (e) { return '' }
+};
+function buildIcons(file, names) {
+  const t = fs.readFileSync(file, 'latin1'), m = {};
   for (const b of t.split(/\n\s*\(Weapon\b/)) {
     const i = b.match(/\(WeaponIndex\s+(\d+)/);
     if (!i || i[1] === '0') continue;
+    if (names && !names[i[1]]) { const wn = b.match(/\(WeaponName\s+"([^"]*)"/); const v = wn && decName(wn[1]); if (v) names[i[1]] = v }
     for (const k of ['BigIconName', 'StandardName']) {
       const x = b.match(new RegExp('\\(' + k + '\\s+"([^"]*)"'));
       const v = x && x[1].trim().toLowerCase();
@@ -102,7 +109,7 @@ function buildRegion(file) {
   return { names: out, alias, code };
 }
 
-const res = { built: new Date().toISOString(), regions: {}, alias: {}, icon: {}, code: {} };
+const res = { built: new Date().toISOString(), regions: {}, alias: {}, icon: {}, code: {}, bfname: {} };
 if (fs.existsSync(SRC_DIR)) {
   for (const f of fs.readdirSync(SRC_DIR)) {
     const m = f.match(/^Item([A-Za-z]+)\.csv$/i);
@@ -124,9 +131,13 @@ if (fs.existsSync(BF_DIR)) {
     const code = m[1].toUpperCase(), region = REGION_OF[code];
     if (!region || !res.regions[region]) { console.log('Bỏ qua ' + f + (region ? ' (chưa có Item' + code + '.csv)' : ' (chưa khai báo hậu tố ' + code + ')')); continue }
     try {
-      const ic = buildIcons(path.join(BF_DIR, f)), out = {};
-      for (const [k, v] of Object.entries(ic)) { const a = v.filter(x => res.regions[region][x]); if (a.length) out[k] = a }
-      res.icon[region] = out;
+      const wn = {}, ic = buildIcons(path.join(BF_DIR, f), wn), out = {}, bn = {};
+      for (const [k, v] of Object.entries(ic)) {
+        const a = v.filter(x => res.regions[region][x]);
+        if (a.length) out[k] = a;
+        else { const n = v.map(x => wn[x]).find(Boolean); if (n) bn[k] = n }   // mã có trong BF005 nhưng không có món trong ItemXX.csv (vd DualAxe) => dùng WeaponName của BF005
+      }
+      res.icon[region] = out; res.bfname[region] = bn;
       console.log(f + ' -> ' + region + ': ' + Object.keys(out).length + ' mã hình');
     } catch (e) { console.log('Lỗi ' + f + ': ' + e.message) }
   }

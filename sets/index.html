@@ -87,9 +87,9 @@
   #dpop .dbox{height:200px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:6px;background:var(--thumb)}
   #dpop .dbox img.w{max-width:92%;max-height:170px;object-fit:contain}
   #dpop .noimg{font-size:12px;font-weight:400}
-  #dpop .dvars{display:flex;flex-wrap:wrap;gap:3px;justify-content:center;padding:10px 0 0}
+  #dpop .dvars{display:flex;flex-wrap:nowrap;gap:3px;justify-content:center;padding:10px 0 0}   /* nút trong popup: luôn 1 hàng */
   #dpop .dvars:empty{display:none}
-  #dpop .dvars .vbtn{height:auto;font-size:12px;padding:5px 12px;line-height:1.2}
+  #dpop .dvars .vbtn{flex:0 1 auto;min-width:0;height:auto;font-size:11px;padding:4px 8px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   #dpop .dreg{flex:1 1 260px;font-size:14px;line-height:1.9}
   #dpop .dreg table{border-collapse:collapse}
   #dpop .dreg td{vertical-align:top;padding:0;white-space:nowrap}
@@ -180,9 +180,10 @@ const CONFIG = {
   // Chữ trên nút biến thể = COPY NGUYÊN từ CFG.VARIANT_RULES của weapon/index.html (khi trang Weapon đổi luật thì dán lại đoạn này).
   // Luật có merge:true: các DÒNG khác nhau trong Sheet (mã chỉ khác nhau ở đoạn tên) được gộp thành 1 thẻ có nhiều nút, như trang Weapon.
   VARIANT_RULES: [
+    { match:'ThrowingAxe', tokens:['','ThrowingAxe'], labels:['Normal','Throwing'] },   // rìu có bản ném, vd BCAxe_Beast + ThrowingAxe_Beast
     { match:'USPMatch', tokens:['','USPMatch_S_'], labels:['Default','Silencer'] },   // USP Match có bản _S_ (giảm thanh), vd USPMatch_BornBeast + USPMatch_S_BornBeast
     { match:'_Slug', tokens:['','_BuckShot','_Slug'], labels:['Normal','Normal','Slug'] },   // shotgun có 2 mã: mã kết thúc _Slug = Slug, mã còn lại = Normal
-    { match:'M249SPW', tokens:['','_Changemode','_Chg'], labels:['Normal','Shoulder Firing','Shoulder Firing'] },
+    { match:'M249SPW', tokens:['','_Changemode','_Chg'], labels:['Normal','Shoulder Firing','Shoulder Firing'] },   // mọi khẩu M249 SPW có 2 chế độ
     { tokens:['DualUZI-Gold','DualUZI-Gold_2'], labels:['World','Vietnam'] },
     { tokens:['RifleBeast','KnifeBeast'], labels:['Default','Change Mode'] },
     { tokens:['BaiHu_VN26_NM','BaiHu_VN26'], labels:['Original','Virtus.Pro'] },
@@ -194,7 +195,7 @@ const CONFIG = {
     { tokens:['','_Drum'], labels:['Normal','Drum Magazine'], merge:true },
     { tokens:['_Rifle','_Knife'], labels:['Gun','Knife'] },
     { tokens:['','_Carbine'], labels:['Default','Carbine'] },
-    { tokens:['_GSpirit','_GSpirit_Changemode'], labels:['Normal','Change Mode'] },
+    { tokens:['_GSpirit', '_GSpirit_Changemode'],         labels:['Normal','Change Mode'] },
     { tokens:['','_Changemode'], labels:['Normal','Dual'] },
     { tokens:['_Protocol','_Protocol_Chg'], labels:['Normal','Change Mode'] },
     { tokens:['_UnderTech','_UnderTech_Chg'], labels:['Normal','Change Mode'] },
@@ -204,8 +205,10 @@ const CONFIG = {
     { tokens:['','_DMR'], labels:['Normal','DMR'] },
     { tokens:['','_Change'], labels:['Default','Change'] },
     { tokens:['','_spear','_wheel'], labels:['PVP','Spear','Wheel'] },
-    { tokens:['9A91_WildEagle','9A91_WildEagle_Silencer','9A91_WildEagle_Scope','9A91_WildEagle_ExtendMag'], labels:['Default','Silencer','Scope','Ext. Mag'] },
-    { tokens:['_XS_1','_XS_2'], labels:['Grip','No Grip'] }
+    { tokens:['9A91_WildEagle','9A91_WildEagle_Silencer','9A91_WildEagle_Scope','9A91_WildEagle_ExtendMag'], labels:['Default','Silencer','Scope','Ext. Mag'], },
+    { tokens:['_XS_1','_XS_2'], labels:['Grip','No Grip'] },
+    // { tokens:['','_NT'],               labels:['regular','De-sign'] },   // hậu tố: ví dụ _NT thêm cuối tên file
+    // { tokens:['_A','_B','_C'],         labels:['Một','Hai','Ba'] },     // 3 nút
   ]
 };
 
@@ -327,6 +330,9 @@ function regionsOf(r, labels, weaponName){
    - Ô ghi "-"                     => khu vực đó KHÔNG có vũ khí này, không tự điền.
    Cách nhận diện vũ khí: so tên các ô khu vực đã có (và cột A) với tên trong file CSV -> ra mã _ItemIndexInBute -> lấy tên ở khu vực khác.
    Nếu cùng 1 vũ khí có 2 dòng (vd bản Trung Quốc và bản _NM), dòng nào đã có tên ở khu vực đó thì dòng kia không bị điền thêm. */
+// AUTO_STRICT = true: khu vực nào KHÔNG có mã cột B trong BF005 / ItemXX của khu vực đó thì bỏ trống, không đoán theo tên
+// (tránh lấy tên bản thường cho skin riêng, vd Balisong_LuminousEdge_GC chỉ có ở Brazil). Đổi thành false để quay lại cách đoán theo tên.
+const AUTO_STRICT = true;
 // Từ đồng nghĩa khi so tên (bên trái đổi thành bên phải). Thêm cặp mới nếu gặp tên viết khác nhau giữa Sheet và CSV.
 const AUTO_SYN = [['withoutthelogo','nm'],['withoutlogo','nm'],['nomark','nm'],['renovo','lenovo']];
 const AUTO_NORM = s => AUTO_SYN.reduce((t, [a, b]) => t.split(a).join(b), String(s || '').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ''));
@@ -356,6 +362,10 @@ function autoFillRegions(headers, rows, data, opt) {
   const val = (row, i) => String(row[i] == null ? '' : row[i]).replace(/[̵̶]/g, '').trim();
 
   // 1) tìm mã cho từng dòng
+  const _codesOf = row => String(row[imgCol] || '').split(/[,;\n|]+/).map(t => t.trim().replace(/\.(png|jpe?g|webp)$/i, '').replace(/^.*?BUYWEAPON_INFO_/i, '').toLowerCase()).filter(Boolean);
+  const _hasIn = (r, c) => !!((data.icon && data.icon[r] && data.icon[r][c]) || (data.code && data.code[r] && data.code[r][c]) || (data.bfname && data.bfname[r] && data.bfname[r][c]));
+  const _has = c => cols.some(({ r }) => (data.icon && data.icon[r] && data.icon[r][c]) || (data.code && data.code[r] && data.code[r][c]) || (data.bfname && data.bfname[r] && data.bfname[r][c]));
+  const inData = (data.icon || data.code) ? (row => { const cs = _codesOf(row); return !cs.length || cs.some(c => _has(c) || _has(c.replace(/_nm$/, ''))); }) : null;
   const info = rows.map(row => {
     const score = new Map(), add = (k, w) => score.set(k, (score.get(k) || 0) + w);
     const ev = new Map(), mark = (k, r) => { if (!ev.has(k)) ev.set(k, new Set()); ev.get(k).add(r) };   // khu vực nào đã khớp với mã k
@@ -425,10 +435,12 @@ function autoFillRegions(headers, rows, data, opt) {
   rows.forEach((row, n) => {
     const x = info[n];
     for (const i of x.blocked) row[i] = '';
+    // Mã cột B KHÔNG có trong BF005 / mã nội bộ của khu vực nào (vd skin riêng China như Balisong_LuminousEdge_GC) => bỏ qua, không đoán theo tên
     if (!x.keys.length && !x.icon.size && !x.byCode.size) { unresolved++; return }
     const grp = groups.get(find(n));
     for (const { i, r } of cols) {
       if (val(row, i) || x.blocked.has(i)) continue;
+      if (AUTO_STRICT && inData && _codesOf(row).length && !_codesOf(row).some(c => _hasIn(r, c) || _hasIn(r, c.replace(/_nm$/, '')))) continue;   // mã không có trong BF005 / mã nội bộ của KHU VỰC NÀY => bỏ qua khu vực này
       if (grp.length > 1 && !x.icon.has(r)) {   // có khớp BF005 ở khu vực này thì điền luôn, không nhường cho dòng anh em (_NM)
         if (grp.some(m => m !== n && (val(rows[m], i) || info[m].blocked.has(i)))) continue;   // dòng anh em đã có tên khu vực này
         const isNM = m => /_nm(\b|_|$)/i.test(String(rows[m][imgCol] || ''));
@@ -516,6 +528,29 @@ function multiCodeNames(rows, data, opt){
   });
   return n;
 }
+/* DỰ PHÒNG BF005: dòng vẫn trống CẢ 5 khu vực (mã có trong BF005 nhưng không có món trong ItemXX.csv, vd DualAxe)
+   => lấy tên WeaponName trong BF005 của từng khu vực. Chỉ dùng khi dòng chưa có tên nào để tránh điền nhầm. */
+function bfNameFallback(rows, data, opt){
+  const from = opt.from, to = opt.to, imgCol = opt.imgCol == null ? 1 : opt.imgCol, headers = opt.headers || [];
+  if (!data || !data.bfname) return 0;
+  const cols = [];
+  for (let i = from; i <= to && i < headers.length; i++){
+    const h = String(headers[i] || '').replace(/[̵̶]/g, '').trim().toLowerCase();
+    const r = Object.keys(data.bfname).find(k => k.toLowerCase() === h);
+    if (r) cols.push({i, r});
+  }
+  let n = 0;
+  rows.forEach(row => {
+    if (cols.some(({i}) => String(row[i] == null ? '' : row[i]).trim())) return;
+    const cs = String(row[imgCol] || '').split(/[,;\n|]+/).map(t => t.trim().replace(/\.(png|jpe?g|webp)$/i, '').replace(/^.*?BUYWEAPON_INFO_/i, '').toLowerCase()).filter(Boolean);
+    for (const {i, r} of cols){
+      const m = data.bfname[r] || {};
+      const names = [...new Set(cs.map(c => m[c] || m[c.replace(/_nm$/, '')]).filter(Boolean))];
+      if (names.length){ row[i] = names.join(', '); (row.auto || (row.auto = new Set())).add(i); n++; }
+    }
+  });
+  return n;
+}
 /* ---------------- tìm ảnh (giống trang Weapon) ---------------- */
 let MAN = {};      // manifest.json: khớp hoa/thường trên Cloudflare
 let MANIDX = new Map();   // tên file ảnh (không đuôi, chữ thường) -> đường dẫn thật, tìm trong MỌI thư mục của img/
@@ -590,7 +625,8 @@ function badgesTag(list, cls){
 /* ---------------- nhãn nút biến thể (luật của trang Weapon) ---------------- */
 const baseOf = c => { let n = String(c || '').split(/[\\/]/).pop().trim().replace(/\.(png|jpg|jpeg|webp)$/i, ''); if (!n.toUpperCase().startsWith(CONFIG.IMG_PREFIX)) n = CONFIG.IMG_PREFIX + '_' + n; return n; };
 function tmpLabels(name, bases){   // Steyr TMP 3-4 mã: Normal, Dual, Mutation[, Charged] (mã thứ 3 là AWM/Charge => Charged)
-  if(bases.some(b=>/rsh12_infection_rm/i.test(b))&&bases.length>1)return bases.map((_,k)=>'Level '+(k+1));   // RSh-12 Infection RM: Level 1 - 2 - 3 - 4 theo thứ tự mã ở cột B
+  if(/rank\s*match/i.test(name||'')&&bases.length>1)return bases.map((_,k)=>'Level '+(k+1));   // tên có "Rank Match" + nhiều mã (vd BTFknife_White, _Platinum, _Purple, _Rainbow) => Level 1, 2, 3...
+  if(bases.some(b=>/rsh12_infection_rm|bcaxe_rm_/i.test(b))&&bases.length>1)return bases.map((_,k)=>'Level '+(k+1));   // RSh-12 Infection RM (Level 1-4), BCAxe_RM_... (Level 1-6): theo thứ tự mã ở cột B
   if(/raging\s*bull/i.test(name||'')&&bases.length===2){   // Raging Bull theo thứ tự mã ở cột B
     if(/judgement|judgment/i.test(name))return ['PVP','PVE'];
     if(/stimulator/i.test(name))return ['Default','Astronaut'];
@@ -601,13 +637,14 @@ function tmpLabels(name, bases){   // Steyr TMP 3-4 mã: Normal, Dual, Mutation[
     if(bases.length===3)return ['PVP','PVE','Change Mode'];
     if(bases.length===2)return ['PVP','PVE'];
   }
+  if(/gatling\s*gun/i.test(name||'')&&/wild\s*shot/i.test(name)&&bases.length===2)return ['Normal','PVE Charged'];   // Gatling Gun-Wild Shot (2 mã): Normal, PVE Charged
   if(/\bp90\b/i.test(name||'')){   // P90-Frenzy (2 mã): PVP, PVE | P90-Wild Shot (4 mã): PVP, PVP Dual, PVE, PVE Charged
     if(/frenzy/i.test(name)&&bases.length===2)return ['PVP','PVE'];
     if(/wild\s*shot/i.test(name)&&bases.length===4)return ['PVP','PVP Dual','PVE','PVE Charged'];
   }
-  if (!/\btmp\b/i.test(name || '') || bases.length < 3 || bases.length > 4) return null;
-  if (bases.length === 4) return ['Normal', 'Dual', 'Mutation', 'Charged'];
-  return ['Normal', 'Dual', /AWM|Charge/i.test(bases[2]) ? 'Charged' : 'Mutation'];
+  if(!/\btmp\b/i.test(name||'')||bases.length<3||bases.length>4)return null;
+  if(bases.length===4)return ['Normal','Dual','Mutation','Charged'];
+  return ['Normal','Dual',/AWM|Charge/i.test(bases[2])?'Charged':'Mutation'];
 }
 function variantLabels(codes, name){
   const bases = codes.map(baseOf);
@@ -953,6 +990,7 @@ async function init(){
     }
     try{ inheritIntegrated(okTabs.flatMap(t => t.rows), {from: CONFIG.REGION_COL_FROM, to: CONFIG.REGION_COL_TO, imgCol: 1}); }catch(e){ console.warn(e); }
     try{ multiCodeNames(okTabs.flatMap(t => t.rows), window.REGIONS_DATA, {from: CONFIG.REGION_COL_FROM, to: CONFIG.REGION_COL_TO, imgCol: 1, headers: okTabs[0].labels}); }catch(e){ console.warn(e); }   // nhiều mã cùng loại => "Tên 1, Tên 2"   // vũ khí tích hợp lấy tên khu vực của dòng chính
+    try{ bfNameFallback(okTabs.flatMap(t => t.rows), window.REGIONS_DATA, {from: CONFIG.REGION_COL_FROM, to: CONFIG.REGION_COL_TO, imgCol: 1, headers: okTabs[0].labels}); }catch(e){ console.warn(e); }   // còn trống hết => tên WeaponName trong BF005
     WEAPONS = okTabs.flatMap(t => {
       const bc = t.labels.findIndex(h => /^badges?$/i.test(h));
       const badgeCol = bc >= 0 ? bc : 8;
