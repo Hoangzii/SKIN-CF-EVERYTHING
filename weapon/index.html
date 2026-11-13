@@ -634,8 +634,10 @@ function build(headers,rows){
   ROWS=rows.filter(r=>r[C.name]||r[C.image]).map(r=>({
     raw:r,
     name:r[C.name],
-    ...(x=>({imgs:x,img:x[0]||''}))((r[C.image]||'').split(/[,;\n|]+/).map(t=>t.trim()).filter(Boolean)),
-    scope:scopeOf(r,(r[C.image]||'').split(/[,;\n|]+/).map(t=>t.trim()).filter(Boolean)),
+    // ô cột B: mã hình => tìm ảnh; câu ghi chú (có dấu cách, KHÔNG có chữ BUYWEAPON_INFO) (vd "This weapon does not exist in CrossFire.") => chỉ hiện sau System Name
+    ...(x=>({imgs:x,img:x[0]||''}))((r[C.image]||'').split(/[,;\n|]+/).map(t=>t.trim()).filter(t=>t&&!(/\s/.test(t)&&!/BUYWEAPON_INFO/i.test(t)))),
+    note:(r[C.image]||'').split(/[;\n|]+/).map(t=>t.trim()).filter(t=>/\s/.test(t)&&!/BUYWEAPON_INFO/i.test(t)).join(' '),
+    scope:scopeOf(r,(r[C.image]||'').split(/[,;\n|]+/).map(t=>t.trim()).filter(t=>t&&!(/\s/.test(t)&&!/BUYWEAPON_INFO/i.test(t)))),
     badges:(r[C.badges]||'').split(/[,;\n|]+/).map(x=>x.trim()).filter(Boolean),
     ...(rc=>{
       const p=rc.map(c=>parseReg(c.v,r[C.name]));
@@ -738,6 +740,17 @@ function normBase(v){
 }
 // Steyr TMP có 3-4 mã ở cột B: theo thứ tự trái -> phải: Normal, Dual, Mutation[, Charged] (3 mã mà mã thứ 3 là AWM/Charge => Normal, Dual, Charged)
 function tmpLabels(name,bases){
+  if(/card/i.test(name||'')&&/mercenary\s*forces/i.test(name||'')&&bases.length>1){   // Card-Mercenary Forces: theo thứ tự mã ở cột B
+    const N=['A Min','An Qi Er','Fei','Mo'];return bases.map((_,k)=>N[k]||('#'+(k+1)));
+  }
+  if(bases.some(b=>/card_rm_.*_(platinum|master|pog)$/i.test(b))){   // Card Rank Match (vd Card_RM_TD_S31_Platinum / _Master / _POG): theo đuôi mã
+    const N={platinum:'Platinum',master:'Master',pog:'Path of Glory'};
+    return bases.map((b,k)=>{const m=b.match(/_([a-z]+)$/i);return (m&&N[m[1].toLowerCase()])||('#'+(k+1))});
+  }
+  if(bases.some(b=>/card_heartshot_\d+$/i.test(b))){   // Card HeartShot: số cuối mã => tên nhân vật
+    const N={1:'Lan Xier',2:'Qingya',3:'Wu Mengmeng',5:'Esports Yun'};
+    return bases.map((b,k)=>{const m=b.match(/_(\d+)$/);return (m&&N[m[1]])||('#'+(k+1))});
+  }
   if(/rank\s*match/i.test(name||'')&&bases.length>1)return bases.map((_,k)=>'Level '+(k+1));   // tên có "Rank Match" + nhiều mã (vd BTFknife_White, _Platinum, _Purple, _Rainbow) => Level 1, 2, 3...
   if(bases.some(b=>/rsh12_infection_rm|bcaxe_rm_/i.test(b))&&bases.length>1)return bases.map((_,k)=>'Level '+(k+1));   // RSh-12 Infection RM (Level 1-4), BCAxe_RM_... (Level 1-6): theo thứ tự mã ở cột B
   if(/raging\s*bull/i.test(name||'')&&bases.length===2){   // Raging Bull theo thứ tự mã ở cột B
@@ -1225,7 +1238,8 @@ function openPop(card,j){
   const ids=[...new Set(vars.flatMap(v=>v.row.imgs||[]).filter(Boolean))];
   const names=ids.map(x=>esc(x.split(/[\\/]/).pop().replace(/\.(png|jpg|jpeg|webp)$/i,'').replace(/^.*?BUYWEAPON_INFO_/i,'')));
   // 1 mã: "System Name: <mã>" trên 1 dòng; nhiều mã: "System Name:" rồi xuống dòng liệt kê từng mã
-  $('pyl').innerHTML='<span class="lb">System Name:</span>'+(names.length>1?'<br>'+names.join('<br>'):' '+(names[0]||'(no image name)'));
+  const note=[...new Set(vars.map(v=>v.row.note).filter(Boolean))].map(esc).join('<br>');   // câu ghi chú ở cột B (không phải mã hình)
+  $('pyl').innerHTML='<span class="lb">System Name:</span>'+(note?' '+note:names.length>1?'<br>'+names.join('<br>'):' '+(names[0]||'(no image name)'));   // có câu ghi chú ở cột B => hiện câu đó thay cho mã
   popRender(Math.min(j||0,vars.length-1));
   $('pop').classList.add('on');
 }

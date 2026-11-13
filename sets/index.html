@@ -625,6 +625,17 @@ function badgesTag(list, cls){
 /* ---------------- nhãn nút biến thể (luật của trang Weapon) ---------------- */
 const baseOf = c => { let n = String(c || '').split(/[\\/]/).pop().trim().replace(/\.(png|jpg|jpeg|webp)$/i, ''); if (!n.toUpperCase().startsWith(CONFIG.IMG_PREFIX)) n = CONFIG.IMG_PREFIX + '_' + n; return n; };
 function tmpLabels(name, bases){   // Steyr TMP 3-4 mã: Normal, Dual, Mutation[, Charged] (mã thứ 3 là AWM/Charge => Charged)
+  if(/card/i.test(name||'')&&/mercenary\s*forces/i.test(name||'')&&bases.length>1){   // Card-Mercenary Forces: theo thứ tự mã ở cột B
+    const N=['A Min','An Qi Er','Fei','Mo'];return bases.map((_,k)=>N[k]||('#'+(k+1)));
+  }
+  if(bases.some(b=>/card_rm_.*_(platinum|master|pog)$/i.test(b))){   // Card Rank Match (vd Card_RM_TD_S31_Platinum / _Master / _POG): theo đuôi mã
+    const N={platinum:'Platinum',master:'Master',pog:'Path of Glory'};
+    return bases.map((b,k)=>{const m=b.match(/_([a-z]+)$/i);return (m&&N[m[1].toLowerCase()])||('#'+(k+1))});
+  }
+  if(bases.some(b=>/card_heartshot_\d+$/i.test(b))){   // Card HeartShot: số cuối mã => tên nhân vật
+    const N={1:'Lan Xier',2:'Qingya',3:'Wu Mengmeng',5:'Esports Yun'};
+    return bases.map((b,k)=>{const m=b.match(/_(\d+)$/);return (m&&N[m[1]])||('#'+(k+1))});
+  }
   if(/rank\s*match/i.test(name||'')&&bases.length>1)return bases.map((_,k)=>'Level '+(k+1));   // tên có "Rank Match" + nhiều mã (vd BTFknife_White, _Platinum, _Purple, _Rainbow) => Level 1, 2, 3...
   if(bases.some(b=>/rsh12_infection_rm|bcaxe_rm_/i.test(b))&&bases.length>1)return bases.map((_,k)=>'Level '+(k+1));   // RSh-12 Infection RM (Level 1-4), BCAxe_RM_... (Level 1-6): theo thứ tự mã ở cột B
   if(/raging\s*bull/i.test(name||'')&&bases.length===2){   // Raging Bull theo thứ tự mã ở cột B
@@ -951,7 +962,8 @@ function openDetail(i){
     $('dimg').innerHTML = imgTag(v.code, info.hints);
     $('dvars').innerHTML = labels.map((l, k) => `<button type="button" class="vbtn${k === cur ? ' on' : ''}" data-v="${k}">${html(l)}</button>`).join('');
     const names = codes.map(c => html(rawCode(c)));
-    $('dcodes').innerHTML = '<span class="lb">System Name:</span>' + (names.length > 1 ? '<br>' + names.join('<br>') : ' ' + (names[0] || '(no image name)'));
+    const note = [...new Set(m.vars.map(x => x.w && x.w.note).filter(Boolean))].map(html).join('<br>');
+    $('dcodes').innerHTML = '<span class="lb">System Name:</span>' + (note ? ' ' + note : names.length > 1 ? '<br>' + names.join('<br>') : ' ' + (names[0] || '(no image name)'));   // có câu ghi chú => hiện thay cho mã
   };
   $('dvars').onclick = e => { const b = e.target.closest('.vbtn'); if (b){ cur = +b.dataset.v; m.vi = cur; paint(); } };
   paint();
@@ -996,7 +1008,8 @@ async function init(){
       const badgeCol = bc >= 0 ? bc : 8;
       return t.rows.map(r => ({
         name: (r[0] || '').trim(),
-        codes: splitCodes(r[1]),                       // cột B = BUYWEAPON_INFO
+        codes: splitCodes(r[1]).filter(c => !(/\s/.test(c) && !/BUYWEAPON_INFO/i.test(c))),   // cột B = BUYWEAPON_INFO (bỏ câu ghi chú)
+        note: String(r[1] || '').split(/[;\n|]+/).map(t => t.trim()).filter(t => /\s/.test(t) && !/BUYWEAPON_INFO/i.test(t)).join(' '),   // câu ghi chú, vd "This weapon does not exist in CrossFire."
         hints: [r[2], r[3]],                           // cột C / D: gợi ý thư mục ảnh
         badges: splitBadges(r[badgeCol]),
         regions: regionsOf(r, t.labels, (r[0] || '').trim())
