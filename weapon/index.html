@@ -170,6 +170,9 @@ const CFG = {
   // Hình có thể nằm trong thư mục con của Img/ (vd Img/RIFLE/, Img/SNIPER/). Trang tự thử: thư mục trùng với cột TYPE (C) / CATEGORIZED (D)
   // của dòng đó trước, rồi thư mục gốc Img/, rồi các thư mục trong danh sách dưới đây. Thêm tên thư mục mới vào đây nếu cần.
   IMG_SUBDIRS: ['RIFLE','SNIPER','SMG','SHOTGUN','MG','PISTOL','MELEE','GRENADE','FLASHBANG','SMOKE'],
+  // Vũ khí có nhiều mã ở cột B nhưng chỉ hiện HÌNH CỦA MÃ ĐẦU TIÊN, KHÔNG có nút (tên khu vực vẫn nhận theo mọi mã).
+  // Ghi tên cột A hoặc 1 mã ở cột B (bỏ BUYWEAPON_INFO_), không phân biệt hoa/thường.
+  SINGLE_IMAGE: ['Knife-Hunting', 'Knife-Hunting Blade'],
   BADGE_DIR: 'img/badges/',
   BADGE_POPUP_ONLY: ['slug'],   // thẻ chỉ hiện trong popup (không hiện trên thẻ ngoài lưới)
   BADGE_ALIAS: { slug:'slugammo14' },   // chữ ghi ở cột BADGES -> tên file (bỏ tag_): ghi "Slug" => tag_slugammo14.png. Thêm cặp mới nếu tên file khác chữ ghi trong Sheet
@@ -636,6 +639,7 @@ function build(headers,rows){
     name:r[C.name],
     // ô cột B: mã hình => tìm ảnh; câu ghi chú (có dấu cách, KHÔNG có chữ BUYWEAPON_INFO) (vd "This weapon does not exist in CrossFire.") => chỉ hiện sau System Name
     ...(x=>({imgs:x,img:x[0]||''}))((r[C.image]||'').split(/[,;\n|]+/).map(t=>t.trim()).filter(t=>t&&!(/\s/.test(t)&&!/BUYWEAPON_INFO/i.test(t)))),
+    single:(s=>(CFG.SINGLE_IMAGE||[]).some(n=>s.includes(n.trim().toLowerCase())))([String(r[C.name]||'').trim().toLowerCase(),...String(r[C.image]||'').split(/[,;\n|]+/).map(t=>t.trim().replace(/^.*?BUYWEAPON_INFO_/i,'').toLowerCase())]),
     note:(r[C.image]||'').split(/[;\n|]+/).map(t=>t.trim()).filter(t=>/\s/.test(t)&&!/BUYWEAPON_INFO/i.test(t)).join(' '),
     scope:scopeOf(r,(r[C.image]||'').split(/[,;\n|]+/).map(t=>t.trim()).filter(t=>t&&!(/\s/.test(t)&&!/BUYWEAPON_INFO/i.test(t)))),
     badges:(r[C.badges]||'').split(/[,;\n|]+/).map(x=>x.trim()).filter(Boolean),
@@ -740,6 +744,11 @@ function normBase(v){
 }
 // Steyr TMP có 3-4 mã ở cột B: theo thứ tự trái -> phải: Normal, Dual, Mutation[, Charged] (3 mã mà mã thứ 3 là AWM/Charge => Normal, Dual, Charged)
 function tmpLabels(name,bases){
+  if(/plasma\s*knife/i.test(name||'')&&bases.length===2)return ['PVP','PVE'];   // Plasma Knife (2 mã): PVP, PVE theo thứ tự cột B
+  if(bases.length===2&&/gatlinggun1$/i.test(bases[0])&&/gatlinggun2$/i.test(bases[1]))return ['Green','Purple'];   // Gatling Gun-Halloween: GatlingGun1 = Green, GatlingGun2 = Purple
+  if(bases.length>1&&bases.every(b=>/_lv(\d+|max)$/i.test(b)))return bases.map((_,k)=>'Level '+(k+1));   // mã đuôi _Lv1, _Lv2, _Lv3, _LvMax (vd KnockbackHammer) => Level 1 - 4 theo thứ tự cột B
+  if(/invisible\s*assassin\s*sword/i.test(name||'')&&/master\s*hunter/i.test(name||'')&&bases.length===2)return ['Default','Phantom'];   // Invisible Assassin Sword-Master Hunter (2 mã): Default, Phantom theo thứ tự cột B
+  if(/hyperion\s*gauntlet/i.test(name||'')&&bases.length===2)return ['Normal','PVE Charged'];   // Hyperion Gauntlet (2 mã): Normal, PVE Charged theo thứ tự cột B
   if(/card/i.test(name||'')&&/mercenary\s*forces/i.test(name||'')&&bases.length>1){   // Card-Mercenary Forces: theo thứ tự mã ở cột B
     const N=['A Min','An Qi Er','Fei','Mo'];return bases.map((_,k)=>N[k]||('#'+(k+1)));
   }
@@ -773,6 +782,7 @@ function tmpLabels(name,bases){
   return ['Normal','Dual',/AWM|Charge/i.test(bases[2])?'Charged':'Mutation'];
 }
 function variantInfo(r){
+  if(r.single) return null;   // SINGLE_IMAGE: không có nút
   if(r.members) return {bases:r.members.map(m=>m.base),labels:r.members.map(m=>m.label),rows:r.members.map(m=>m.row)};
   if(!r.imgs||r.imgs.length<2) return null;
   const bases=r.imgs.map(normBase);

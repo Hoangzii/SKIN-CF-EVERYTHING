@@ -168,6 +168,7 @@ const CONFIG = {
   IMG_SUBDIRS: ['RIFLE','SNIPER','SMG','SHOTGUN','MG','PISTOL','MELEE','GRENADE','FLASHBANG','SMOKE','SCOPE'],
   IMG_PREFIX: 'BUYWEAPON_INFO',
   BADGE_DIR: 'img/badges/',                                  // file tag_<tên>.PNG
+  SINGLE_IMAGE: ['Knife-Hunting', 'Knife-Hunting Blade'],   // tên cột A hoặc mã: chỉ hiện hình mã đầu tiên, không có nút (giống trang Weapon)
   BADGE_POPUP_ONLY: ['slug'],                                // thẻ chỉ hiện trong popup chi tiết
   BADGE_ALIAS: { slug: 'slugammo14' },                       // ghi "Slug" ở cột BADGES => tag_slugammo14.png (giống trang Weapon)
   EXCLUDE_TOKENS: ['NM'],                                    // mã có đoạn này (vd ..._10th_NM) không được lấy khi khớp theo TỪ KHOÁ (ghi mã đầy đủ thì vẫn lấy)
@@ -569,6 +570,7 @@ async function loadManifest(){
 }
 const fixPath = p => { try{ return MAN[decodeURIComponent(p).toLowerCase()] || p; }catch(e){ return p; } };
 function imgList(code, hints){
+  if (Array.isArray(code)) return [...new Set(code.flatMap(c => imgList(c, hints)))];   // nhiều mã: thử lần lượt
   if (!code) return [];
   const n = String(code).split(/[\\/]/).pop().trim();
   const m = n.match(/\.(png|jpg|jpeg|webp)$/i);
@@ -625,6 +627,11 @@ function badgesTag(list, cls){
 /* ---------------- nhãn nút biến thể (luật của trang Weapon) ---------------- */
 const baseOf = c => { let n = String(c || '').split(/[\\/]/).pop().trim().replace(/\.(png|jpg|jpeg|webp)$/i, ''); if (!n.toUpperCase().startsWith(CONFIG.IMG_PREFIX)) n = CONFIG.IMG_PREFIX + '_' + n; return n; };
 function tmpLabels(name, bases){   // Steyr TMP 3-4 mã: Normal, Dual, Mutation[, Charged] (mã thứ 3 là AWM/Charge => Charged)
+  if(/plasma\s*knife/i.test(name||'')&&bases.length===2)return ['PVP','PVE'];   // Plasma Knife (2 mã): PVP, PVE theo thứ tự cột B
+  if(bases.length===2&&/gatlinggun1$/i.test(bases[0])&&/gatlinggun2$/i.test(bases[1]))return ['Green','Purple'];   // Gatling Gun-Halloween: GatlingGun1 = Green, GatlingGun2 = Purple
+  if(bases.length>1&&bases.every(b=>/_lv(\d+|max)$/i.test(b)))return bases.map((_,k)=>'Level '+(k+1));   // mã đuôi _Lv1, _Lv2, _Lv3, _LvMax (vd KnockbackHammer) => Level 1 - 4 theo thứ tự cột B
+  if(/invisible\s*assassin\s*sword/i.test(name||'')&&/master\s*hunter/i.test(name||'')&&bases.length===2)return ['Default','Phantom'];   // Invisible Assassin Sword-Master Hunter (2 mã): Default, Phantom theo thứ tự cột B
+  if(/hyperion\s*gauntlet/i.test(name||'')&&bases.length===2)return ['Normal','PVE Charged'];   // Hyperion Gauntlet (2 mã): Normal, PVE Charged theo thứ tự cột B
   if(/card/i.test(name||'')&&/mercenary\s*forces/i.test(name||'')&&bases.length>1){   // Card-Mercenary Forces: theo thứ tự mã ở cột B
     const N=['A Min','An Qi Er','Fei','Mo'];return bases.map((_,k)=>N[k]||('#'+(k+1)));
   }
@@ -750,6 +757,7 @@ function toVars(m){
     m.vi = Math.max(0, ms.findIndex(x => normCode(x.w.codes[0]) === mk));
   } else {
     const codes = m.codes && m.codes.length ? m.codes : (m.code ? [m.code] : []);
+    if (w && codes.length > 1 && (CONFIG.SINGLE_IMAGE || []).some(n => [norm(w.name).trim(), ...codes.map(c => normCode(c))].includes(norm(n).trim()))){ m.vars = [{w, code: codes[0], label: ''}]; m.vi = 0; return m; }   // SINGLE_IMAGE: hình mã đầu, không nút
     const labels = codes.length > 1 ? variantLabels(codes, w.name) : [''];
     m.vars = codes.length ? codes.map((c, k) => ({w, code: c, label: labels[k]})) : [{w, code: null, label: ''}];
     m.vi = Math.max(0, codes.findIndex(c => normCode(c) === mk));
@@ -906,7 +914,7 @@ function memberCard(m, i){
     for (let k = 0; k < labels.length; k += 5) rows.push('<div class="rrow">' + labels.slice(k, k + 5).map((l, j) => btn(l, k + j)).join('') + '</div>');
     vs = `<div class="rsel${labels.length > 5 ? ' multi' : ''}">${rows.join('')}</div>`;
   }
-  return `<div class="card item" data-k="${i}"${m.probe ? ' data-probe="1"' : ''}><div class="thumb">${imgTag(v.code, info.hints)}${badgesTag(cardBadges(info.badges))}</div>${vs}<div class="name">${html(info.name)}</div></div>`;
+  return `<div class="card item" data-k="${i}"${m.probe ? ' data-probe="1"' : ''}><div class="thumb">${imgTag(v.alts || v.code, info.hints)}${badgesTag(cardBadges(info.badges))}</div>${vs}<div class="name">${html(info.name)}</div></div>`;
 }
 function renderPop(){
   const set = popSet;
@@ -959,7 +967,7 @@ function openDetail(i){
     /* cột P–W: ô có Removed (gạch ngang) => thêm khu vực đó bên dưới 5 khu vực chính, theo thứ tự cột */
     info.regions.filter(r => r.idx >= CONFIG.CLOSED_FROM && r.html && !CONFIG.POPUP_REGIONS.some(n => norm(n) === norm(r.label).trim()))
       .map(r => `<tr class="rm"><td>${html(r.label)}</td><td class="sep">|</td><td>${r.html}</td></tr>`).join('') + '</table>';
-    $('dimg').innerHTML = imgTag(v.code, info.hints);
+    $('dimg').innerHTML = imgTag(v.alts || v.code, info.hints);
     $('dvars').innerHTML = labels.map((l, k) => `<button type="button" class="vbtn${k === cur ? ' on' : ''}" data-v="${k}">${html(l)}</button>`).join('');
     const names = codes.map(c => html(rawCode(c)));
     const note = [...new Set(m.vars.map(x => x.w && x.w.note).filter(Boolean))].map(html).join('<br>');
