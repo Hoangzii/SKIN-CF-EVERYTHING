@@ -61,6 +61,14 @@ function parseCSV(text) {
   return rows;
 }
 
+// Ngày ra mắt từ cột _REG_DATE: 20120530000000 / 20140206 / số ngày kiểu Excel (41438) -> số YYYYMMDD; không đọc được -> 0
+function regDate(v) {
+  v = String(v || '').trim();
+  let m = v.match(/^(20[0-3]\d)(\d\d)(\d\d)/);
+  if (m && +m[2] >= 1 && +m[2] <= 12 && +m[3] >= 1 && +m[3] <= 31) return +(m[1] + m[2] + m[3]);
+  if (/^\d{5}(\.\d+)?$/.test(v)) { const d = new Date(Date.UTC(1899, 11, 30) + Math.floor(+v) * 864e5); const y = d.getUTCFullYear(); if (y >= 2005 && y <= 2035) return y * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate(); }
+  return 0;
+}
 const clean = s => String(s || '').replace(/^\s*\[[^\]]*\]\s*/, '').replace(/\s+/g, ' ').trim();
 
 function buildRegion(file) {
@@ -70,6 +78,7 @@ function buildRegion(file) {
   const need = ['_ITEM_TYPE', '_SHORT_NAME', '_NAME', '_ItemIndexInBute', '_ItemButeType', '_ITEM_ID'];
   for (const k of need) if (!(k in I)) throw new Error(path.basename(file) + ': thiếu cột ' + k);
   const byKey = new Map();   // key -> Map(name -> {n, id})
+  const dates = {};          // key -> ngày ra mắt sớm nhất (YYYYMMDD)
   const codeMap = new Map(); // mã nội bộ -> Map(name -> {n, id})
   for (let r = 1; r < rows.length; r++) {
     const v = rows[r];
@@ -89,6 +98,8 @@ function buildRegion(file) {
     let name = clean(v[I._SHORT_NAME]);
     if (!name || name === '-') name = clean(v[I._NAME]).replace(/\s+\d+\s*(days?|ngày)$/i, '');
     if (!name || name === '-') continue;
+    const dt = I._REG_DATE != null ? regDate(v[I._REG_DATE]) : 0;
+    if (dt && (!dates[key] || dt < dates[key])) dates[key] = dt;
     if (!byKey.has(key)) byKey.set(key, { m: new Map(), a: new Set() });
     const K = byKey.get(key), m = K.m, id = +v[I._ITEM_ID] || 0;
     const e = m.get(name) || { n: 0, id };
@@ -106,10 +117,10 @@ function buildRegion(file) {
   }
   const code = {};
   for (const [c, M] of codeMap) code[c] = [...M.entries()].sort((a, b) => b[1].n - a[1].n || a[1].id - b[1].id).map(x => x[0]);
-  return { names: out, alias, code };
+  return { names: out, alias, code, dates };
 }
 
-const res = { built: new Date().toISOString(), regions: {}, alias: {}, icon: {}, code: {}, bfname: {} };
+const res = { built: new Date().toISOString(), regions: {}, alias: {}, icon: {}, code: {}, bfname: {}, date: {} };
 if (fs.existsSync(SRC_DIR)) {
   for (const f of fs.readdirSync(SRC_DIR)) {
     const m = f.match(/^Item([A-Za-z]+)\.csv$/i);
@@ -118,7 +129,7 @@ if (fs.existsSync(SRC_DIR)) {
     if (!region) { console.log('Bỏ qua ' + f + ' (chưa khai báo hậu tố ' + code + ' trong REGION_OF)'); continue }
     try {
       const b = buildRegion(path.join(SRC_DIR, f));
-      res.regions[region] = b.names; res.alias[region] = b.alias; res.code[region] = b.code;
+      res.regions[region] = b.names; res.alias[region] = b.alias; res.code[region] = b.code; res.date[region] = b.dates;
       console.log(f + ' -> ' + region + ': ' + Object.keys(res.regions[region]).length + ' vũ khí');
     } catch (e) { console.log('Lỗi ' + f + ': ' + e.message) }
   }

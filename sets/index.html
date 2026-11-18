@@ -168,7 +168,7 @@ const CONFIG = {
   IMG_SUBDIRS: ['RIFLE','SNIPER','SMG','SHOTGUN','MG','PISTOL','MELEE','GRENADE','FLASHBANG','SMOKE','SCOPE'],
   IMG_PREFIX: 'BUYWEAPON_INFO',
   BADGE_DIR: 'img/badges/',                                  // file tag_<tên>.PNG
-  SINGLE_IMAGE: ['Knife-Hunting', 'Knife-Hunting Blade'],   // tên cột A hoặc mã: chỉ hiện hình mã đầu tiên, không có nút (giống trang Weapon)
+  SINGLE_IMAGE: ['Knife-Hunting', 'Knife-Hunting Blade', 'M14 EBR-QT'],   // tên cột A hoặc mã: chỉ hiện hình mã đầu tiên, không có nút (giống trang Weapon)
   BADGE_POPUP_ONLY: ['slug'],                                // thẻ chỉ hiện trong popup chi tiết
   BADGE_ALIAS: { slug: 'slugammo14' },                       // ghi "Slug" ở cột BADGES => tag_slugammo14.png (giống trang Weapon)
   EXCLUDE_TOKENS: ['NM'],                                    // mã có đoạn này (vd ..._10th_NM) không được lấy khi khớp theo TỪ KHOÁ (ghi mã đầy đủ thì vẫn lấy)
@@ -627,6 +627,7 @@ function badgesTag(list, cls){
 /* ---------------- nhãn nút biến thể (luật của trang Weapon) ---------------- */
 const baseOf = c => { let n = String(c || '').split(/[\\/]/).pop().trim().replace(/\.(png|jpg|jpeg|webp)$/i, ''); if (!n.toUpperCase().startsWith(CONFIG.IMG_PREFIX)) n = CONFIG.IMG_PREFIX + '_' + n; return n; };
 function tmpLabels(name, bases){   // Steyr TMP 3-4 mã: Normal, Dual, Mutation[, Charged] (mã thứ 3 là AWM/Charge => Charged)
+  if(bases.length>1&&bases.every(b=>/guanxiaoyu(bl|gr)$/i.test(b)))return bases.map(b=>/bl$/i.test(b)?'Black List':'Global Risk');   // Umbrella-Guan Xiaoyu: ...BL = Black List, ...GR = Global Risk
   if(/plasma\s*knife/i.test(name||'')&&bases.length===2)return ['PVP','PVE'];   // Plasma Knife (2 mã): PVP, PVE theo thứ tự cột B
   if(bases.length===2&&/gatlinggun1$/i.test(bases[0])&&/gatlinggun2$/i.test(bases[1]))return ['Green','Purple'];   // Gatling Gun-Halloween: GatlingGun1 = Green, GatlingGun2 = Purple
   if(bases.length>1&&bases.every(b=>/_lv(\d+|max)$/i.test(b)))return bases.map((_,k)=>'Level '+(k+1));   // mã đuôi _Lv1, _Lv2, _Lv3, _LvMax (vd KnockbackHammer) => Level 1 - 4 theo thứ tự cột B

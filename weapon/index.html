@@ -172,7 +172,15 @@ const CFG = {
   IMG_SUBDIRS: ['RIFLE','SNIPER','SMG','SHOTGUN','MG','PISTOL','MELEE','GRENADE','FLASHBANG','SMOKE'],
   // Vũ khí có nhiều mã ở cột B nhưng chỉ hiện HÌNH CỦA MÃ ĐẦU TIÊN, KHÔNG có nút (tên khu vực vẫn nhận theo mọi mã).
   // Ghi tên cột A hoặc 1 mã ở cột B (bỏ BUYWEAPON_INFO_), không phân biệt hoa/thường.
-  SINGLE_IMAGE: ['Knife-Hunting', 'Knife-Hunting Blade'],
+  // Thứ tự hiển thị (giống zaiqaq.pages.dev/clt): theo SỐ HIỆU VŨ KHÍ (WeaponIndex / _ItemIndexInBute), nhỏ trước. RELEASE_ORDER = thứ tự khu vực dùng để dò số hiệu.
+  // Ngày lấy của khu vực đầu tiên có dữ liệu theo thứ tự dưới đây. Không có => cuối loại đó, giữ thứ tự Sheet.
+  // Gộp các dòng cùng tên gốc dạng "Tên (Nhãn)" thành 1 thẻ: tiêu đề = Tên, nút bấm = các Nhãn (theo thứ tự trong Sheet)
+  NAME_MERGE: ['Umbrella-Guan Xiaoyu'],
+  SORT_BY_INDEX: false,   // true = sắp theo số hiệu vũ khí giống zaiqaq; false = thứ tự Google Sheet (như ban đầu)
+  RELEASE_ORDER: ['China','Vietnam','Brazil','West','Philippines'],
+  // Các vũ khí ra mắt CÙNG NGÀY xếp theo loại (cột C - TYPE) theo thứ tự này
+  TYPE_ORDER: ['RIFLE','SNIPER','SMG','MG','SHOTGUN','PISTOL','MELEE','THROW'],
+  SINGLE_IMAGE: ['Knife-Hunting', 'Knife-Hunting Blade', 'M14 EBR-QT'],
   BADGE_DIR: 'img/badges/',
   BADGE_POPUP_ONLY: ['slug'],   // thẻ chỉ hiện trong popup (không hiện trên thẻ ngoài lưới)
   BADGE_ALIAS: { slug:'slugammo14' },   // chữ ghi ở cột BADGES -> tên file (bỏ tag_): ghi "Slug" => tag_slugammo14.png. Thêm cặp mới nếu tên file khác chữ ghi trong Sheet
@@ -621,6 +629,31 @@ function regCell(r,i){
 const segHTML=sg=>sg.map(x=>x.s?`<s>${esc(x.t)}</s>`:esc(x.t)).join('');
 const regHTML=(r,i)=>{const sg=r.segs&&r.segs[i];return sg?segHTML(sg):esc((r.disp&&r.disp[i])||r.reg[i])};
 
+/* Ngày ra mắt (_REG_DATE) + số hiệu vũ khí (WeaponIndex) của 1 dòng: theo CFG.RELEASE_ORDER, khu vực đầu tiên
+   nhận ra vũ khí (BF005 theo mã cột B, hoặc tên ở ô khu vực) và có ngày. Trả về {date, idx}. */
+let REL_IDX=null;
+function releaseOf(raw){
+  const d=AUTO_DATA,none={idx:0};if(!d||!d.regions)return none;
+  const N=s=>String(s||'').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,'');
+  if(!REL_IDX){REL_IDX={};for(const r of Object.keys(d.regions||{})){const m=REL_IDX[r]=new Map();for(const [k,ns] of Object.entries(d.regions[r]))for(const n of ns){const z=N(n);if(z){if(!m.has(z))m.set(z,[]);m.get(z).push(k)}}}}
+  const codes=String(raw[CFG.COL.image]||'').split(/[,;\n|]+/).map(t=>t.trim().replace(/^.*?BUYWEAPON_INFO_/i,'').toLowerCase()).filter(Boolean);
+  const order=(CFG.RELEASE_ORDER||[]).concat(Object.keys(d.regions).filter(r=>!(CFG.RELEASE_ORDER||[]).includes(r)));
+  // 1) mã hình cột B (BigIconName) → WeaponIndex, 2) không có thì dò theo tên trong cột khu vực
+  for(const pass of [0,1])for(const r of order){
+    const regs=d.regions[r]||{},ic=(d.icon&&d.icon[r])||{};
+    let ks=[];
+    if(!pass)ks=codes.flatMap(c=>ic[c]||ic[c.replace(/_nm$/,'')]||[]);
+    else{const ci=H.findIndex(h=>String(h||'').trim().toLowerCase()===r.toLowerCase());if(ci>=0){const v=N(String(raw[ci]||'').replace(/[\u0335\u0336]/g,''));if(v&&REL_IDX[r])ks=REL_IDX[r].get(v)||[]}}
+    ks=ks.filter(k=>regs[k]&&+k>0);
+    if(ks.length)return {idx:Math.min(...ks.map(Number))};
+  }
+  return none;
+}
+function sortRows(list){
+  const big=1e9,V=r=>r.members?Math.min(...r.members.map(x=>(x.row.rel&&x.row.rel.idx)||big)):((r.rel&&r.rel.idx)||big);
+  if(!CFG.SORT_BY_INDEX)return list;   // mặc định: giữ đúng thứ tự trong Google Sheet
+  return list.slice().sort((a,b)=>(V(a)-V(b))||(a.ord-b.ord));   // giống zaiqaq: số hiệu vũ khí (WeaponIndex) nhỏ trước; không tìm được số hiệu => cuối, giữ thứ tự Sheet
+}
 function build(headers,rows){
   H=headers;
   const C=CFG.COL;
@@ -651,6 +684,7 @@ function build(headers,rows){
     })(REGIONS.map(g=>regCell(r,g.idx)))
   }));
   ALLROWS=ROWS;
+  ROWS.forEach((r,i)=>{r.ord=i;r.rel=releaseOf(r.raw)});
   ROWS=mergeGroups(ROWS);
 }
 
@@ -744,6 +778,7 @@ function normBase(v){
 }
 // Steyr TMP có 3-4 mã ở cột B: theo thứ tự trái -> phải: Normal, Dual, Mutation[, Charged] (3 mã mà mã thứ 3 là AWM/Charge => Normal, Dual, Charged)
 function tmpLabels(name,bases){
+  if(bases.length>1&&bases.every(b=>/guanxiaoyu(bl|gr)$/i.test(b)))return bases.map(b=>/bl$/i.test(b)?'Black List':'Global Risk');   // Umbrella-Guan Xiaoyu: ...BL = Black List, ...GR = Global Risk
   if(/plasma\s*knife/i.test(name||'')&&bases.length===2)return ['PVP','PVE'];   // Plasma Knife (2 mã): PVP, PVE theo thứ tự cột B
   if(bases.length===2&&/gatlinggun1$/i.test(bases[0])&&/gatlinggun2$/i.test(bases[1]))return ['Green','Purple'];   // Gatling Gun-Halloween: GatlingGun1 = Green, GatlingGun2 = Purple
   if(bases.length>1&&bases.every(b=>/_lv(\d+|max)$/i.test(b)))return bases.map((_,k)=>'Level '+(k+1));   // mã đuôi _Lv1, _Lv2, _Lv3, _LvMax (vd KnockbackHammer) => Level 1 - 4 theo thứ tự cột B
@@ -810,10 +845,17 @@ function titleHTML(row){
 }
 function buildEntries(list){
   const mrules=CFG.VARIANT_RULES.map((ru,ri)=>({ru,ri})).filter(x=>x.ru.merge);
-  if(!mrules.length)return list.map(row=>({row}));
   const byKey=new Map(),of=new Map();
+  // gộp theo tên (CFG.NAME_MERGE): "Umbrella-Guan Xiaoyu (Black List)" + "(Global Risk)" => 1 thẻ 2 nút
+  const NM=(CFG.NAME_MERGE||[]).map(x=>x.trim().toLowerCase());
+  if(NM.length)list.forEach(row=>{
+    const m=String(row.name||'').match(/^(.*?\S)\s*\(([^()]+)\)\s*$/);if(!m||!NM.includes(m[1].toLowerCase()))return;
+    const key='name|'+m[1].toLowerCase();let g=byKey.get(key);
+    if(!g){g={ru:{labels:[],tokens:[]},stem:key,title:m[1],members:[]};byKey.set(key,g)}
+    g.ru.labels.push(m[2].trim());g.ru.tokens.push(m[2].trim());g.members.push({row,j:g.ru.labels.length-1});of.set(row,g);
+  });
   list.forEach(row=>{
-    if(!row.img)return;
+    if(!row.img||of.has(row))return;
     const base=normBase(row.img);
     for(const {ru,ri} of mrules){
       let j=-1,len=-1;
@@ -843,7 +885,7 @@ function buildEntries(list){
     if(!g||g.members.length<2){out.push({row});return}
     if(done.has(g))return;done.add(g);
     const m=g.members.slice().sort((a,b)=>a.j-b.j);
-    out.push({row:m[0].row,members:m,ru:g.ru});
+    out.push({row:m[0].row,members:m,ru:g.ru,title:g.title});
   });
   return out;
 }
@@ -863,7 +905,7 @@ $('grid').addEventListener('click',e=>{
     const row=m.row,title=titleOf(row);
     it.dataset.i=ROWS.indexOf(row);it.classList.toggle('rm',removedIn(row));
     it.querySelector('.pic').innerHTML=(imgTag(weaponSrcList(row.img,row),'w',title)||'<div class="noimg">(no image)</div>')+scopeBtn(row);
-    it.querySelector('.name>span').innerHTML=titleHTML(row);
+    it.querySelector('.name>span').innerHTML=it._g.title?esc(it._g.title):titleHTML(row);
     it.querySelector('.badges').innerHTML=cardBadges(row.badges).map(x=>imgTag(badgeSrcList(x),'b',x)).join('');
     it.querySelectorAll('.tgl button').forEach(x=>x.classList.toggle('on',x===b));
     fillScopes(it);
@@ -1134,7 +1176,7 @@ function filtered(){
   return ROWS.filter(r=>r.members?r.members.some(m=>pass(m.row)):pass(r));
 }
 function render(){
-  const list=buildEntries(filtered()),reg=F.region==null?-1:F.region;
+  const list=buildEntries(sortRows(filtered())),reg=F.region==null?-1:F.region;
   const per=state.per,pages=Math.max(1,Math.ceil(list.length/per));
   if(state.page>pages)state.page=pages;
   const slice=list.slice((state.page-1)*per,state.page*per);
@@ -1146,7 +1188,7 @@ function render(){
     return `<div class="item${removedIn(r)?' rm':''}" data-i="${ROWS.indexOf(r)}">
       <div class="pic">${imgTag(weaponSrcList(r.img,r),'w',title)||'<div class="noimg">(no image)</div>'}${scopeBtn(r)}</div>
       <div class="foot">${(vi=>vi?`<div class="tgl" style="display:flex">${vi.labels.map((l,j)=>`<button class="${j?'':'on'}" data-j="${j}">${esc(l)}</button>`).join('')}</div>`:'<div class="tgl"></div>')(en.members?{labels:en.members.map(m=>en.ru.labels[m.j]||en.ru.tokens[m.j]||'#')}:variantInfo(r))}
-      <div class="name"><span>${titleHTML(r)}</span></div></div>
+      <div class="name"><span>${en.title?esc(en.title):titleHTML(r)}</span></div></div>
       <div class="badges">${cardBadges(r.badges).map(b=>imgTag(badgeSrcList(b),'b',b)).join('')}</div>
       </div>`;
   }).join('');
@@ -1218,7 +1260,7 @@ $('modal').addEventListener('click',e=>{if(e.target===$('modal'))closeScope()});
 let POP=null;
 function popRender(k){
   const v=POP.vars[k],r=v.row;
-  $('ptitle').innerHTML=esc(r.name)+(r.badges&&r.badges.length?'<span class="pbdg">'+r.badges.map(b=>imgTag(badgeSrcList(b),'b',b)).join('')+'</span>':'');   // tên + thẻ BADGES (cột J)
+  $('ptitle').innerHTML=esc(POP.title||r.name)+(r.badges&&r.badges.length?'<span class="pbdg">'+r.badges.map(b=>imgTag(badgeSrcList(b),'b',b)).join('')+'</span>':'');   // tên + thẻ BADGES (cột J)
   $('ppic').innerHTML=imgTag(weaponSrcList(v.img,r),'w',r.name)||'<div class="noimg">(no image)</div>';   // chỉ hình cột IMAGE
   $('ptgl').querySelectorAll('button').forEach(b=>b.classList.toggle('on',+b.dataset.j===k));
   $('preg').innerHTML='<table>'+CFG.POPUP_REGIONS.map(n=>{
@@ -1243,7 +1285,7 @@ function openPop(card,j){
     const vi=variantInfo(row);
     vars=vi&&vi.bases.length>1?vi.bases.map((b,k)=>({row,img:b,label:vi.labels[k]})):[{row,img:row.img,label:''}];
   }
-  POP={vars};
+  POP={vars,title:card._g&&card._g.title};
   $('ptgl').innerHTML=vars.length>1?vars.map((v,k)=>`<button type="button" data-j="${k}">${esc(v.label)}</button>`).join(''):'';
   const ids=[...new Set(vars.flatMap(v=>v.row.imgs||[]).filter(Boolean))];
   const names=ids.map(x=>esc(x.split(/[\\/]/).pop().replace(/\.(png|jpg|jpeg|webp)$/i,'').replace(/^.*?BUYWEAPON_INFO_/i,'')));
