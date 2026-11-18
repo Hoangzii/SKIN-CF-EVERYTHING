@@ -181,6 +181,8 @@ const CFG = {
   // Các vũ khí ra mắt CÙNG NGÀY xếp theo loại (cột C - TYPE) theo thứ tự này
   TYPE_ORDER: ['RIFLE','SNIPER','SMG','MG','SHOTGUN','PISTOL','MELEE','THROW'],
   SINGLE_IMAGE: ['Knife-Hunting', 'Knife-Hunting Blade', 'M14 EBR-QT'],
+  // Cả dòng có cột E (gốc vũ khí) thuộc danh sách này: nếu cột B có từ 2 BUYWEAPON_INFO trở lên => chỉ hiện hình đầu, không nút (khu vực vẫn nhận diện đủ các mã)
+  SINGLE_IMAGE_BASE: ['AK47-Scope'],
   BADGE_DIR: 'img/badges/',
   BADGE_POPUP_ONLY: ['slug'],   // thẻ chỉ hiện trong popup (không hiện trên thẻ ngoài lưới)
   BADGE_ALIAS: { slug:'slugammo14' },   // chữ ghi ở cột BADGES -> tên file (bỏ tag_): ghi "Slug" => tag_slugammo14.png. Thêm cặp mới nếu tên file khác chữ ghi trong Sheet
@@ -499,14 +501,22 @@ function parseCSV(t){
   if(f!==''||row.length){row.push(f);out.push(row)}
   return out;
 }
+/* Cột "WEAPON SETS" (thêm tay giữa WEAPON LIST và SCOPE): tách riêng ra khỏi dòng => SCOPE, CLASS, ..., khu vực giữ nguyên vị trí cũ.
+   Giá trị cột được giữ ở r.wsets (dùng cho trang Sets). Sheet chưa có cột này thì không ảnh hưởng gì. */
+const WS_RE=/^\s*weapon\s*sets?\s*$/i;
+function dropWS(all,hdr){
+  const k=(hdr||all[0]||[]).findIndex(h=>WS_RE.test(String(h==null?'':h)));
+  if(k<0)return all;
+  return all.map((a,i)=>{const b=a.slice();const v=b.splice(k,1)[0];if(i)b.wsets=String(v==null?'':v).trim();return b});
+}
 async function loadCsv(gid){
   const u=`https://docs.google.com/spreadsheets/d/${CFG.SHEET_ID}/export?format=csv&gid=${encodeURIComponent(gid)}&_=${Date.now()}`;
   const r=await fetch(u,{cache:'no-store'});
   if(!r.ok)throw new Error('CSV gid '+gid+': HTTP '+r.status);
   const txt=await r.text();
   if(/^\s*</.test(txt))throw new Error('CSV gid '+gid+': Sheet chưa chia sẻ công khai');
-  const L=CFG.COL.regionTo+1,all=parseCSV(txt.replace(/^﻿/,''));
-  const pad=a=>{const o=[];for(let i=0;i<L;i++)o.push(String(a[i]==null?'':a[i]).trim());return o};
+  const L=CFG.COL.regionTo+1,all=dropWS(parseCSV(txt.replace(/^﻿/,'')));
+  const pad=a=>{const o=[];for(let i=0;i<L;i++)o.push(String(a[i]==null?'':a[i]).trim());o.wsets=a.wsets||'';return o};
   if(!all.length)throw new Error('CSV gid '+gid+': trống');
   return {headers:pad(all[0]),rows:all.slice(1).map(pad).filter(x=>x.some(Boolean))};
 }
@@ -523,7 +533,8 @@ function parseTable(t){
   let headers=t.cols.map(c=>(c.label||'').trim());
   let rows=t.rows.map(r=>{const a=[];for(let i=0;i<t.cols.length;i++)a.push(cellStr(r.c&&r.c[i]));return a});
   if(headers.every(h=>!h)&&rows.length){headers=rows.shift()}
-  return {headers,rows};
+  const x=dropWS([headers,...rows]);
+  return {headers:x[0],rows:x.slice(1)};
 }
 
 /* ===== Đọc định dạng gạch ngang thật bằng Google Sheets API (gviz không trả về định dạng) ===== */
@@ -549,12 +560,17 @@ async function loadStrikes(refs){
   const titles=refs.map(ref=>{ref=String(ref).trim();const p=/^\d+$/.test(ref)?props.find(x=>String(x.sheetId)===ref):props.find(x=>x.title.toLowerCase()===ref.toLowerCase());return p?p.title:null});
   const want=[...new Set(titles.filter(Boolean))];
   if(!want.length)return refs.map(()=>null);
-  const last=String.fromCharCode(65+CFG.COL.regionTo);
+  const last=String.fromCharCode(65+CFG.COL.regionTo+1);   // +1: chừa chỗ cho cột WEAPON SETS
   const ranges=want.map(t=>'ranges='+encodeURIComponent("'"+t.replace(/'/g,"''")+"'!A:"+last)).join('&');
   const fields='sheets(properties(title),data(rowData(values(formattedValue,effectiveFormat(textFormat(strikethrough)),textFormatRuns))))';
   const d=await j(base+'?includeGridData=true&'+ranges+'&fields='+encodeURIComponent(fields)+'&'+key);
   const byTitle={};
-  d.sheets.forEach(s=>{byTitle[s.properties.title]=(s.data&&s.data[0]&&s.data[0].rowData)||[]});
+  d.sheets.forEach(s=>{
+    const rd=(s.data&&s.data[0]&&s.data[0].rowData)||[];
+    const h=((rd[0]&&rd[0].values)||[]).map(c=>c&&c.formattedValue!=null?String(c.formattedValue):'');
+    const k=h.findIndex(x=>WS_RE.test(x));
+    byTitle[s.properties.title]=k<0?rd:rd.map(rw=>{const v=((rw&&rw.values)||[]).slice();v.splice(k,1);return Object.assign({},rw,{values:v})});   // bỏ cột WEAPON SETS
+  });
   return titles.map(t=>t?byTitle[t]||null:null);
 }
 /* Sheets API trả về TOÀN BỘ dòng (kể cả dòng đang bị bộ lọc "Create a filter" ẩn), còn gviz thì bỏ các dòng bị lọc ẩn.
@@ -672,7 +688,7 @@ function build(headers,rows){
     name:r[C.name],
     // ô cột B: mã hình => tìm ảnh; câu ghi chú (có dấu cách, KHÔNG có chữ BUYWEAPON_INFO) (vd "This weapon does not exist in CrossFire.") => chỉ hiện sau System Name
     ...(x=>({imgs:x,img:x[0]||''}))((r[C.image]||'').split(/[,;\n|]+/).map(t=>t.trim()).filter(t=>t&&!(/\s/.test(t)&&!/BUYWEAPON_INFO/i.test(t)))),
-    single:(s=>(CFG.SINGLE_IMAGE||[]).some(n=>s.includes(n.trim().toLowerCase())))([String(r[C.name]||'').trim().toLowerCase(),...String(r[C.image]||'').split(/[,;\n|]+/).map(t=>t.trim().replace(/^.*?BUYWEAPON_INFO_/i,'').toLowerCase())]),
+    single:(CFG.SINGLE_IMAGE_BASE||[]).some(n=>n.trim().toLowerCase()===String(r[C.e]||'').trim().toLowerCase())||(s=>(CFG.SINGLE_IMAGE||[]).some(n=>s.includes(n.trim().toLowerCase())))([String(r[C.name]||'').trim().toLowerCase(),...String(r[C.image]||'').split(/[,;\n|]+/).map(t=>t.trim().replace(/^.*?BUYWEAPON_INFO_/i,'').toLowerCase())]),
     note:(r[C.image]||'').split(/[;\n|]+/).map(t=>t.trim()).filter(t=>/\s/.test(t)&&!/BUYWEAPON_INFO/i.test(t)).join(' '),
     scope:scopeOf(r,(r[C.image]||'').split(/[,;\n|]+/).map(t=>t.trim()).filter(t=>t&&!(/\s/.test(t)&&!/BUYWEAPON_INFO/i.test(t)))),
     badges:(r[C.badges]||'').split(/[,;\n|]+/).map(x=>x.trim()).filter(Boolean),
