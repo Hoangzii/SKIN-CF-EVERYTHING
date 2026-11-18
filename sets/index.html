@@ -55,6 +55,8 @@
   .rsel.multi .vbtn{flex:0 0 calc((100% - 16px)/5)}
   #pregions{display:flex;gap:6px;flex-wrap:wrap;padding:12px 20px 0;justify-content:center}
   #pregions:empty{display:none}
+  #pregions .psubs{flex-basis:100%;display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+  .sbtn{height:26px;padding:0 12px;font-size:11px}
   .rbtn{height:30px;padding:0 14px;background:var(--card);border:1px solid var(--blue);border-radius:4px;color:var(--blue);font:600 12px 'Lexend',sans-serif;cursor:pointer;transition:.15s}
   .rbtn:hover{background:var(--label)}
   .rbtn.on{background:var(--blue);color:#fff}
@@ -162,6 +164,7 @@ const CONFIG = {
   // Cách điền 1 ô: "9th Anniversary (China), 9th Anniversary (World)"  => set "9th Anniversary Weapon Sets", nút China / World.
   // Thêm (1) phía sau: "9th Anniversary (China) (1)" => vũ khí này là ẢNH ĐẠI DIỆN của set ở khu vực China. Không ghi khu vực => dùng cho mọi khu vực.
   SET_BADGES: { '18th Anniversary': ['18th'], 'Anniversary': ['VVIP'] },   // thẻ góc phải trên của set (trước đây ở cột BADGES tab WEAPON SETS): 'tên set': ['badge']
+  SET_BUTTON_ORDER: { 'Camo': ['Desert','Woodland','Snow'] },   // thứ tự nút riêng cho từng set: 'tên set': [nút 1, nút 2, ...]; ví dụ ô ghi "Camo (Snow)"
   WS_SUFFIX: ' Weapon Sets',                                 // tự thêm vào sau tên set (tên đã kết thúc bằng "Sets" thì giữ nguyên)
   WEAPON_TABS: ['RIFLE','SNIPER','SMG','MG','SHOTGUN','PISTOL','MELEE','THROW'],   // cột A tên · B BUYWEAPON_INFO · C/D thư mục · I badge · J–V tên theo khu vực
   // Ảnh dùng chung thư mục của trang Weapon: .../weapon/img/<TYPE>/BUYWEAPON_INFO_<mã>.PNG
@@ -849,10 +852,12 @@ function presentOf(set, region){
 /* Đọc 1 ô WEAPON SETS: "9th Anniversary (China) (1), 9th Anniversary (World)" -> [{base, region, cover}] */
 function parseWS(cell){
   return String(cell || '').split(/[,;\n|]+/).map(t => t.trim()).filter(Boolean).map(t => {
-    let cover = false, region = '';
+    let cover = false, region = '', sub = '';
     const m1 = t.match(/^(.*?)\s*\(\s*1\s*\)\s*$/); if (m1){ cover = true; t = m1[1]; }
     const m2 = t.match(/^(.*?)\s*\(([^()]*)\)\s*$/); if (m2 && m2[1].trim()){ region = m2[2].trim(); t = m2[1]; }
-    return {base: t.trim(), region, cover};
+    /* 2 ngoặc: "Tournament (Balance) (2016)" => nút ngoài + trong popup = Balance, nút phụ bên dưới trong popup = 2016 */
+    const m3 = region && t.match(/^(.*?)\s*\(([^()]*)\)\s*$/); if (m3 && m3[1].trim()){ sub = region; region = m3[2].trim(); t = m3[1]; }
+    return {base: t.trim(), region, sub, cover};
   }).filter(x => x.base);
 }
 function wsTitle(base){
@@ -923,10 +928,11 @@ $('list').addEventListener('click', e => {
 });
 
 /* ---------------- popup set ---------------- */
-let popSet = null, popRegion = '', popMembers = [];
+let popSet = null, popRegion = '', popSub = '', popMembers = [];
 function openSet(set){
   popSet = set;
   popRegion = set.cur || (set.regions[0] ? set.regions[0].name : '');
+  popSub = '';
   renderPop();
   $('overlay').classList.add('open');
 }
@@ -950,6 +956,12 @@ function renderPop(){
     : '';
   const g = set.regions.find(x => norm(x.name) === norm(popRegion));
   popMembers = g ? g.members : set.members;
+  if (g && g.subs && g.subs.length){                 // nút phụ (vd năm 2016, 2025) nằm dưới nút khu vực, chỉ có trong popup
+    if (!g.subs.some(u => norm(u.name) === norm(popSub))) popSub = g.subs[0].name;
+    const u = g.subs.find(x => norm(x.name) === norm(popSub));
+    popMembers = u.members;
+    $('pregions').innerHTML += '<div class="psubs">' + g.subs.map(x => `<button type="button" class="rbtn sbtn${norm(x.name) === norm(popSub) ? ' on' : ''}" data-s="${attr(x.name)}">${html(x.name)}</button>`).join('') + '</div>';
+  }
   $('popbody').style.setProperty('--cols', Math.max(1, Math.min(6, popMembers.length)));
   $('popbody').innerHTML = popMembers.map(memberCard).join('') || '<div class="noimg" style="padding:20px">Chưa có vũ khí nào khớp với set này.</div>';
   fitRegions($('popbody'));
@@ -957,7 +969,8 @@ function renderPop(){
 $('pregions').onclick = e => {
   const b = e.target.closest('.rbtn');
   if (!b) return;
-  popRegion = b.dataset.r;
+  if (b.dataset.s != null) popSub = b.dataset.s;
+  else { popRegion = b.dataset.r; popSub = ''; }
   renderPop();
 };
 $('popbody').addEventListener('click', e => {
@@ -1057,13 +1070,18 @@ async function init(){
     WEAPONS.forEach(w => w.sets.forEach(e => {
       const key = norm(e.base).trim();
       let st = byName.get(key);
-      if (!st){ st = {name: wsTitle(e.base), extraRaw: e.base, badges: (Object.entries(CONFIG.SET_BADGES || {}).find(([n]) => norm(n).trim() === key || norm(wsTitle(n)).trim() === norm(wsTitle(e.base)).trim()) || [, []])[1].slice(), regs: [], common: [], covers: new Map()}; byName.set(key, st); }
+      if (!st){ st = {name: wsTitle(e.base), base: e.base.trim(), extraRaw: e.base, badges: (Object.entries(CONFIG.SET_BADGES || {}).find(([n]) => norm(n).trim() === key || norm(wsTitle(n)).trim() === norm(wsTitle(e.base)).trim()) || [, []])[1].slice(), regs: [], common: [], covers: new Map()}; byName.set(key, st); }
       if (!w.codes.length) return;                         // dòng chưa có BUYWEAPON_INFO => chưa hiển thị
       let list = st.common;
       if (e.region){
         let g = st.regs.find(x => norm(x.name) === norm(e.region));
-        if (!g){ g = {name: e.region, ws: []}; st.regs.push(g); st.extraRaw += ' ' + e.region; }
+        if (!g){ g = {name: e.region, ws: [], subs: []}; st.regs.push(g); st.extraRaw += ' ' + e.region; }
         list = g.ws;
+        if (e.sub){
+          let u = g.subs.find(x => norm(x.name) === norm(e.sub));
+          if (!u){ u = {name: e.sub, ws: []}; g.subs.push(u); }
+          list = u.ws;
+        }
       }
       if (!list.includes(w)) list.push(w);
       if (e.cover){ const k = e.region ? norm(e.region) : ''; if (!st.covers.has(k)) st.covers.set(k, {code: w.codes[0], hints: w.hints}); }
@@ -1078,9 +1096,32 @@ async function init(){
       return out;
     };
     SETS = [...byName.values()].sort((a, b) => a.name.localeCompare(b.name, 'en', {numeric: true, sensitivity: 'base'}));
+    const REG_ORDER = okTabs[0].labels.slice(CONFIG.REGION_COL_FROM, CONFIG.REGION_COL_TO + 1).map(h => norm(String(h).replace(/[\u0335\u0336]/g, '')).trim()).filter(Boolean);
     SETS.forEach(s => {
-      if (s.regs.length > 1 && s.regs.every(g => /^\d{2,4}$/.test(g.name.trim()))) s.regs.sort((a, b) => +a.name - +b.name);   // nút là số (năm: Halloween (2017), Xmas (2018)...) => xếp tăng dần
-      s.regions = s.regs.map(g => ({name: g.name, members: toMembers([...s.common, ...g.ws.filter(w => !s.common.includes(w))])}));   // vũ khí không ghi khu vực => có ở mọi khu vực
+      if (s.regs.length > 1 && s.regs.every(g => /^\d{2,4}$/.test(g.name.trim()))) s.regs.sort((a, b) => +a.name - +b.name);
+      else if (s.regs.length > 1){                          // nút là khu vực => theo thứ tự cột khu vực trong Sheet (China, Vietnam, Brazil, West, Philippines, Russia, ... Taiwan)
+        const pos = g => { const t = norm(g.name).split(/\s*[\/,&+]\s*/)[0].trim(); const k = REG_ORDER.indexOf(t); return k < 0 ? REG_ORDER.length : k; };   // "West / Brazil" => theo West
+        s.regs = s.regs.map((g, i) => ({g, i})).sort((a, b) => pos(a.g) - pos(b.g) || a.i - b.i).map(x => x.g);   // tên không phải khu vực (World, ...) đứng sau, giữ thứ tự
+      }   // nút là số (năm: Halloween (2017), Xmas (2018)...) => xếp tăng dần
+      const ord = (Object.entries(CONFIG.SET_BUTTON_ORDER || {}).find(([n]) => norm(n).trim() === norm(s.base).trim()) || [, null])[1];
+      if (ord && s.regs.length > 1){                          // thứ tự nút khai báo riêng trong SET_BUTTON_ORDER (vd Camo: Desert, Woodland, Snow)
+        const o = ord.map(x => norm(x).trim()), p = g => { const k = o.indexOf(norm(g.name).trim()); return k < 0 ? o.length : k; };
+        s.regs = s.regs.map((g, i) => ({g, i})).sort((a, b) => p(a.g) - p(b.g) || a.i - b.i).map(x => x.g);
+      }
+      /* set có cả dòng KHÔNG ghi ngoặc ("Gun Niang") lẫn dòng có ngoặc ("Gun Niang (Gun Niang 2)") => dòng không ngoặc thành nút riêng mang tên set, đứng đầu */
+      if (s.common.length && s.regs.length){
+        s.regs.unshift({name: s.base, ws: s.common, subs: []});
+        s.common = [];
+        if (s.covers.has('')){ const c = s.covers.get(''); s.covers.delete(''); if (!s.covers.has(norm(s.base))) s.covers.set(norm(s.base), c); }
+      }
+      s.regions = s.regs.map(g => {
+        const base = [...s.common, ...g.ws.filter(w => !s.common.includes(w))];
+        const subs = g.subs.slice();
+        if (subs.length > 1 && subs.every(u => /^\d+$/.test(u.name.trim()))) subs.sort((a, b) => +a.name - +b.name);   // năm tăng dần
+        return {name: g.name,
+          members: toMembers([...base, ...subs.flatMap(u => u.ws)].filter((w, i, a) => a.indexOf(w) === i)),
+          subs: subs.map(u => ({name: u.name, members: toMembers([...base, ...u.ws.filter(w => !base.includes(w))])}))};
+      });   // vũ khí không ghi khu vực => có ở mọi khu vực
       s.members = s.regions.length ? s.regions[0].members : toMembers(s.common);
       s.cur = s.regions.length ? s.regions[0].name : '';
     });
