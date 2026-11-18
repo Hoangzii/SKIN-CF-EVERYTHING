@@ -160,11 +160,13 @@
    ========================================================= */
 const CONFIG = {
   SHEET_ID: '1GVgZrCybnuEdGPtVE33NMCmwRWSqfgLHIuz2XAXxhoc',
+  API_KEY: 'AIzaSyDQvM2kN1P3HgT2mhzNYmTpCIUm-Ay5IiA',   // Sheets API (giống trang Weapon): đọc ĐỦ mọi dòng dù trong Sheet đang bật bộ lọc
   // Set lấy từ cột "WEAPON SETS" (giữa WEAPON LIST và SCOPE) của các tab RIFLE–THROW (không còn tab WEAPON SETS riêng).
   // Cách điền 1 ô: "9th Anniversary (China), 9th Anniversary (World)"  => set "9th Anniversary Weapon Sets", nút China / World.
   // Thêm (1) phía sau: "9th Anniversary (China) (1)" => vũ khí này là ẢNH ĐẠI DIỆN của set ở khu vực China. Không ghi khu vực => dùng cho mọi khu vực.
   SET_BADGES: { '18th Anniversary': ['18th'], 'Anniversary': ['VVIP'] },   // thẻ góc phải trên của set (trước đây ở cột BADGES tab WEAPON SETS): 'tên set': ['badge']
-  SET_BUTTON_ORDER: { 'Camo': ['Desert','Woodland','Snow'] },   // thứ tự nút riêng cho từng set: 'tên set': [nút 1, nút 2, ...]; ví dụ ô ghi "Camo (Snow)"
+  SET_SWAP: ['National League'],   // set có 1 ngoặc là khu vực: "National League (China)" => nút NGOÀI = National League, nút TRONG popup = China. 2 ngoặc: "National League (National League 2023) (China)" => ngoài 2023, trong China. Không ngoặc => có ở mọi nút trong
+  SET_BUTTON_ORDER: { 'Camo': ['Desert','Woodland','Snow'], 'National League': ['League 2020','League 2022','National League','National League 15th','National League 2023'] },   // thứ tự nút riêng cho từng set: 'tên set': [nút 1, nút 2, ...]; ví dụ ô ghi "Camo (Snow)"
   WS_SUFFIX: ' Weapon Sets',                                 // tự thêm vào sau tên set (tên đã kết thúc bằng "Sets" thì giữ nguyên)
   WEAPON_TABS: ['RIFLE','SNIPER','SMG','MG','SHOTGUN','PISTOL','MELEE','THROW'],   // cột A tên · B BUYWEAPON_INFO · C/D thư mục · I badge · J–V tên theo khu vực
   // Ảnh dùng chung thư mục của trang Weapon: .../weapon/img/<TYPE>/BUYWEAPON_INFO_<mã>.PNG
@@ -279,7 +281,31 @@ async function loadTabCsv(name){
   const pad = a => { const o = []; for (let i = 0; i < n; i++) o.push(String(a[i] == null ? '' : a[i]).trim()); return o; };
   return dropWS(pad(all[0]), all.slice(1).map(pad).filter(x => x.some(Boolean)));
 }
+/* Nguồn 1: Sheets API — trả về toàn bộ dòng, KHÔNG bị bộ lọc / filter view trong Sheet làm ẩn dòng. Đọc 8 tab trong 1 lần gọi. */
+let API_ALL = null;
+function loadAllApi(){
+  if (!API_ALL) API_ALL = (async () => {
+    if (!CONFIG.API_KEY) throw new Error('chưa có API_KEY');
+    const u = 'https://sheets.googleapis.com/v4/spreadsheets/' + CONFIG.SHEET_ID + '/values:batchGet?' +
+      CONFIG.WEAPON_TABS.map(t => 'ranges=' + encodeURIComponent("'" + t.replace(/'/g, "''") + "'!A:Z")).join('&') +
+      '&valueRenderOption=FORMATTED_VALUE&key=' + encodeURIComponent(CONFIG.API_KEY);
+    const d = await (await fetch(u, {cache: 'no-store'})).json();
+    if (d.error) throw new Error(d.error.message);
+    const out = {};
+    d.valueRanges.forEach((v, i) => { out[CONFIG.WEAPON_TABS[i].toUpperCase()] = v.values || []; });
+    return out;
+  })();
+  return API_ALL;
+}
+async function loadTabApi(name){
+  const all = (await loadAllApi())[String(name).toUpperCase()];
+  if (!all || !all.length) throw new Error(name + ': API trống');
+  const n = Math.max(...all.map(a => a.length));
+  const pad = a => { const o = []; for (let i = 0; i < n; i++) o.push(String(a[i] == null ? '' : a[i]).trim()); return o; };
+  return dropWS(pad(all[0]), all.slice(1).map(pad).filter(x => x.some(Boolean)));
+}
 async function loadTab(name){
+  try { return await loadTabApi(name); } catch (e) { console.warn('[API] ' + e.message + ' -> dùng CSV'); }
   try { return await loadTabCsv(name); } catch (e) { console.warn('[CSV] ' + e.message + ' -> dùng gviz (dòng bị bộ lọc trong Sheet có thể bị ẩn)'); }
   return loadTabGviz(name);
 }
@@ -1067,11 +1093,22 @@ async function init(){
     buildMergeGroups();
     /* gom set từ cột WEAPON SETS: cùng tên gốc => 1 set; (Khu vực) => nút khu vực; (1) => ảnh đại diện */
     const byName = new Map();
-    WEAPONS.forEach(w => w.sets.forEach(e => {
+    /* tự nhận: set có dòng KHÔNG ngoặc ("Yellow Crystal TC") + dòng chỉ ghi khu vực ("Yellow Crystal TC (China)") => China / World chỉ nằm trong popup (giống National League) */
+    const REGN = okTabs[0].labels.slice(CONFIG.REGION_COL_FROM, CONFIG.REGION_COL_TO + 1).map(h => norm(String(h).replace(/[\u0335\u0336]/g, '')).trim()).filter(Boolean).concat(['world']);
+    const isRegName = t => { const a = norm(t).split(/\s*[\/,&+]\s*/).map(x => x.trim()).filter(Boolean); return a.length && a.every(x => REGN.includes(x)); };
+    const autoSwap = new Set(), hasPlain = new Set(), hasReg = new Set();
+    WEAPONS.forEach(w => w.sets.forEach(e => { const k = norm(e.base).trim(); if (!e.region) hasPlain.add(k); else if (!e.sub && isRegName(e.region)) hasReg.add(k); }));
+    hasPlain.forEach(k => { if (hasReg.has(k)) autoSwap.add(k); });
+    const isSwap = k => autoSwap.has(k) || (CONFIG.SET_SWAP || []).some(n => norm(n).trim() === k);
+    WEAPONS.forEach(w => w.sets.forEach(e0 => {
+      let e = e0;
       const key = norm(e.base).trim();
       let st = byName.get(key);
       if (!st){ st = {name: wsTitle(e.base), base: e.base.trim(), extraRaw: e.base, badges: (Object.entries(CONFIG.SET_BADGES || {}).find(([n]) => norm(n).trim() === key || norm(wsTitle(n)).trim() === norm(wsTitle(e.base)).trim()) || [, []])[1].slice(), regs: [], common: [], covers: new Map()}; byName.set(key, st); }
       if (!w.codes.length) return;                         // dòng chưa có BUYWEAPON_INFO => chưa hiển thị
+      /* SET_SWAP: đảo 2 tầng nút. "National League (China) (National League 2023)" => nút ngoài = National League 2023, nút trong popup = China;
+         "National League (China)" (không ghi phiên bản) => nút ngoài = National League, nút trong = China */
+      if (e.region && !e.sub && isSwap(key)) e = Object.assign({}, e, {region: e.base.trim(), sub: e.region});
       let list = st.common;
       if (e.region){
         let g = st.regs.find(x => norm(x.name) === norm(e.region));
@@ -1096,32 +1133,43 @@ async function init(){
       return out;
     };
     SETS = [...byName.values()].sort((a, b) => a.name.localeCompare(b.name, 'en', {numeric: true, sensitivity: 'base'}));
+    const YEAR_RE = /^\s*\d{2,4}\s*$/;
+    const yearFirst = list => { const y = list.filter(g => YEAR_RE.test(g.name)).sort((a, b) => +a.name - +b.name); return y.concat(list.filter(g => !YEAR_RE.test(g.name))); };
     const REG_ORDER = okTabs[0].labels.slice(CONFIG.REGION_COL_FROM, CONFIG.REGION_COL_TO + 1).map(h => norm(String(h).replace(/[\u0335\u0336]/g, '')).trim()).filter(Boolean);
     SETS.forEach(s => {
-      if (s.regs.length > 1 && s.regs.every(g => /^\d{2,4}$/.test(g.name.trim()))) s.regs.sort((a, b) => +a.name - +b.name);
+      if (s.regs.length > 1 && s.regs.some(g => YEAR_RE.test(g.name))) s.regs = yearFirst(s.regs);   // có nút năm => năm tăng dần đứng trước, nút khác (10th...) đứng sau
       else if (s.regs.length > 1){                          // nút là khu vực => theo thứ tự cột khu vực trong Sheet (China, Vietnam, Brazil, West, Philippines, Russia, ... Taiwan)
         const pos = g => { const t = norm(g.name).split(/\s*[\/,&+]\s*/)[0].trim(); const k = REG_ORDER.indexOf(t); return k < 0 ? REG_ORDER.length : k; };   // "West / Brazil" => theo West
         s.regs = s.regs.map((g, i) => ({g, i})).sort((a, b) => pos(a.g) - pos(b.g) || a.i - b.i).map(x => x.g);   // tên không phải khu vực (World, ...) đứng sau, giữ thứ tự
       }   // nút là số (năm: Halloween (2017), Xmas (2018)...) => xếp tăng dần
       const ord = (Object.entries(CONFIG.SET_BUTTON_ORDER || {}).find(([n]) => norm(n).trim() === norm(s.base).trim()) || [, null])[1];
-      if (ord && s.regs.length > 1){                          // thứ tự nút khai báo riêng trong SET_BUTTON_ORDER (vd Camo: Desert, Woodland, Snow)
+      const byOrd = list => {                               // thứ tự nút khai báo riêng trong SET_BUTTON_ORDER (vd Camo: Desert, Woodland, Snow)
+        if (!ord || list.length < 2) return list;
         const o = ord.map(x => norm(x).trim()), p = g => { const k = o.indexOf(norm(g.name).trim()); return k < 0 ? o.length : k; };
-        s.regs = s.regs.map((g, i) => ({g, i})).sort((a, b) => p(a.g) - p(b.g) || a.i - b.i).map(x => x.g);
-      }
+        return list.map((g, i) => ({g, i})).sort((a, b) => p(a.g) - p(b.g) || a.i - b.i).map(x => x.g);
+      };
       /* set có cả dòng KHÔNG ghi ngoặc ("Gun Niang") lẫn dòng có ngoặc ("Gun Niang (Gun Niang 2)") => dòng không ngoặc thành nút riêng mang tên set, đứng đầu */
+      const same = s.regs.find(g => norm(g.name).trim() === norm(s.base).trim());
+      if (s.common.length && same){ s.common.forEach(w => { if (!same.ws.includes(w)) same.ws.push(w); }); s.common = []; }   // "National League" (không ngoặc) gộp vào nút cùng tên
       if (s.common.length && s.regs.length){
         s.regs.unshift({name: s.base, ws: s.common, subs: []});
         s.common = [];
         if (s.covers.has('')){ const c = s.covers.get(''); s.covers.delete(''); if (!s.covers.has(norm(s.base))) s.covers.set(norm(s.base), c); }
       }
+      s.regs = byOrd(s.regs);
       s.regions = s.regs.map(g => {
-        const base = [...s.common, ...g.ws.filter(w => !s.common.includes(w))];
-        const subs = g.subs.slice();
-        if (subs.length > 1 && subs.every(u => /^\d+$/.test(u.name.trim()))) subs.sort((a, b) => +a.name - +b.name);   // năm tăng dần
+        let base = [...s.common, ...g.ws.filter(w => !s.common.includes(w))];
+        let subs = g.subs.slice();
+        /* khu vực có nút phụ: dòng chỉ ghi khu vực ("National League (China)") => nút phụ riêng mang tên set, không lẫn vào các nút phụ khác */
+        if (subs.length && g.ws.length && !isSwap(norm(s.base).trim())){ subs.unshift({name: s.base, ws: g.ws.slice()}); base = s.common.slice(); }
+        if (subs.length > 1 && subs.some(u => YEAR_RE.test(u.name))) subs = yearFirst(subs);   // năm tăng dần trước, nút khác (10th...) sau
+        else if (ord && subs.some(u => ord.some(x => norm(x).trim() === norm(u.name).trim()))) subs = byOrd(subs);
+        else { const pos = u => { const t = norm(u.name).split(/\s*[\/,&+]\s*/)[0].trim(); const k = REG_ORDER.indexOf(t); return k < 0 ? REG_ORDER.length : k; };   // nút trong là khu vực => theo cột khu vực
+          subs = subs.map((u, i) => ({u, i})).sort((a, b) => pos(a.u) - pos(b.u) || a.i - b.i).map(x => x.u); }
         return {name: g.name,
           members: toMembers([...base, ...subs.flatMap(u => u.ws)].filter((w, i, a) => a.indexOf(w) === i)),
           subs: subs.map(u => ({name: u.name, members: toMembers([...base, ...u.ws.filter(w => !base.includes(w))])}))};
-      });   // vũ khí không ghi khu vực => có ở mọi khu vực
+      });
       s.members = s.regions.length ? s.regions[0].members : toMembers(s.common);
       s.cur = s.regions.length ? s.regions[0].name : '';
     });
