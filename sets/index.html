@@ -166,7 +166,7 @@ const CONFIG = {
   // Thêm (1) phía sau: "9th Anniversary (China) (1)" => vũ khí này là ẢNH ĐẠI DIỆN của set ở khu vực China. Không ghi khu vực => dùng cho mọi khu vực.
   SET_BADGES: { '18th Anniversary': ['18th'], 'Anniversary': ['VVIP'] },   // thẻ góc phải trên của set (trước đây ở cột BADGES tab WEAPON SETS): 'tên set': ['badge']
   SET_SWAP: ['National League'],   // set có 1 ngoặc là khu vực: "National League (China)" => nút NGOÀI = National League, nút TRONG popup = China. 2 ngoặc: "National League (National League 2023) (China)" => ngoài 2023, trong China. Không ngoặc => có ở mọi nút trong
-  SET_BUTTON_ORDER: { 'Camo': ['Desert','Woodland','Snow'], 'National League': ['League 2020','League 2022','National League','National League 15th','National League 2023'] },   // thứ tự nút riêng cho từng set: 'tên set': [nút 1, nút 2, ...]; ví dụ ô ghi "Camo (Snow)"
+  SET_BUTTON_ORDER: { 'Camo': ['Desert','Woodland','Snow'], 'National League': ['League 2020','League 2022','National League','National League 15th','National League 2023'], 'Royal Guard': ['MK','Sentry','Honor Guard','Royal Guard'] },   // thứ tự nút riêng cho từng set: 'tên set': [nút 1, nút 2, ...]; ví dụ ô ghi "Camo (Snow)"
   WS_SUFFIX: ' Weapon Sets',                                 // tự thêm vào sau tên set (tên đã kết thúc bằng "Sets" thì giữ nguyên)
   WEAPON_TABS: ['RIFLE','SNIPER','SMG','MG','SHOTGUN','PISTOL','MELEE','THROW'],   // cột A tên · B BUYWEAPON_INFO · C/D thư mục · I badge · J–V tên theo khu vực
   // Ảnh dùng chung thư mục của trang Weapon: .../weapon/img/<TYPE>/BUYWEAPON_INFO_<mã>.PNG
@@ -1082,6 +1082,7 @@ async function init(){
         codes: splitCodes(r[1]).filter(c => !(/\s/.test(c) && !/BUYWEAPON_INFO/i.test(c))),   // cột B = BUYWEAPON_INFO (bỏ câu ghi chú)
         note: String(r[1] || '').split(/[;\n|]+/).map(t => t.trim()).filter(t => /\s/.test(t) && !/BUYWEAPON_INFO/i.test(t)).join(' '),   // câu ghi chú, vd "This weapon does not exist in CrossFire."
         base: String(r[4] || '').trim(),               // cột E: gốc vũ khí
+        figurine: [r[6], r[7]].some(x => /figurine/i.test(String(x || ''))),   // cột CLASS = FIGURINE
         hints: [r[2], r[3]],                           // cột C / D: gợi ý thư mục ảnh
         badges: splitBadges(r[badgeCol]),
         sets: parseWS(r.wsets),                        // cột WEAPON SETS
@@ -1130,6 +1131,7 @@ async function init(){
         const ks = m.vars.map(v => normCode(v.code)).filter(Boolean);
         if (!out.some(x => x.vars.some(v => ks.includes(normCode(v.code))))) out.push(m);   // nhiều dòng biến thể => 1 thẻ
       });
+      out.sort((x, y) => (+!!(x.w && x.w.figurine)) - (+!!(y.w && y.w.figurine)));   // trong popup: vũ khí trước, Figurine sau (giữ thứ tự cũ trong mỗi nhóm)
       return out;
     };
     SETS = [...byName.values()].sort((a, b) => a.name.localeCompare(b.name, 'en', {numeric: true, sensitivity: 'base'}));
@@ -1140,13 +1142,13 @@ async function init(){
       if (s.regs.length > 1 && s.regs.some(g => YEAR_RE.test(g.name))) s.regs = yearFirst(s.regs);   // có nút năm => năm tăng dần đứng trước, nút khác (10th...) đứng sau
       else if (s.regs.length > 1){                          // nút là khu vực => theo thứ tự cột khu vực trong Sheet (China, Vietnam, Brazil, West, Philippines, Russia, ... Taiwan)
         const pos = g => { const t = norm(g.name).split(/\s*[\/,&+]\s*/)[0].trim(); const k = REG_ORDER.indexOf(t); return k < 0 ? REG_ORDER.length : k; };   // "West / Brazil" => theo West
-        s.regs = s.regs.map((g, i) => ({g, i})).sort((a, b) => pos(a.g) - pos(b.g) || a.i - b.i).map(x => x.g);   // tên không phải khu vực (World, ...) đứng sau, giữ thứ tự
+        s.regs = s.regs.map((g, i) => ({g, i})).sort((a, b) => pos(a.g) - pos(b.g) || (pos(a.g) === REG_ORDER.length ? String(a.g.name).localeCompare(String(b.g.name), 'en', {numeric: true, sensitivity: 'base'}) : a.i - b.i)).map(x => x.g);   // khu vực theo cột Sheet; tên khác (World, Rusty Gold, ...) đứng sau, xếp theo bảng chữ cái
       }   // nút là số (năm: Halloween (2017), Xmas (2018)...) => xếp tăng dần
       const ord = (Object.entries(CONFIG.SET_BUTTON_ORDER || {}).find(([n]) => norm(n).trim() === norm(s.base).trim()) || [, null])[1];
       const byOrd = list => {                               // thứ tự nút khai báo riêng trong SET_BUTTON_ORDER (vd Camo: Desert, Woodland, Snow)
         if (!ord || list.length < 2) return list;
         const o = ord.map(x => norm(x).trim()), p = g => { const k = o.indexOf(norm(g.name).trim()); return k < 0 ? o.length : k; };
-        return list.map((g, i) => ({g, i})).sort((a, b) => p(a.g) - p(b.g) || a.i - b.i).map(x => x.g);
+        return list.map((g, i) => ({g, i})).sort((a, b) => p(a.g) - p(b.g) || String(a.g.name).localeCompare(String(b.g.name), 'en', {numeric: true, sensitivity: 'base'})).map(x => x.g);
       };
       /* set có cả dòng KHÔNG ghi ngoặc ("Gun Niang") lẫn dòng có ngoặc ("Gun Niang (Gun Niang 2)") => dòng không ngoặc thành nút riêng mang tên set, đứng đầu */
       const same = s.regs.find(g => norm(g.name).trim() === norm(s.base).trim());
@@ -1165,7 +1167,7 @@ async function init(){
         if (subs.length > 1 && subs.some(u => YEAR_RE.test(u.name))) subs = yearFirst(subs);   // năm tăng dần trước, nút khác (10th...) sau
         else if (ord && subs.some(u => ord.some(x => norm(x).trim() === norm(u.name).trim()))) subs = byOrd(subs);
         else { const pos = u => { const t = norm(u.name).split(/\s*[\/,&+]\s*/)[0].trim(); const k = REG_ORDER.indexOf(t); return k < 0 ? REG_ORDER.length : k; };   // nút trong là khu vực => theo cột khu vực
-          subs = subs.map((u, i) => ({u, i})).sort((a, b) => pos(a.u) - pos(b.u) || a.i - b.i).map(x => x.u); }
+          subs = subs.map((u, i) => ({u, i})).sort((a, b) => pos(a.u) - pos(b.u) || (pos(a.u) === REG_ORDER.length ? String(a.u.name).localeCompare(String(b.u.name), 'en', {numeric: true, sensitivity: 'base'}) : a.i - b.i)).map(x => x.u); }
         return {name: g.name,
           members: toMembers([...base, ...subs.flatMap(u => u.ws)].filter((w, i, a) => a.indexOf(w) === i)),
           subs: subs.map(u => ({name: u.name, members: toMembers([...base, ...u.ws.filter(w => !base.includes(w))])}))};
