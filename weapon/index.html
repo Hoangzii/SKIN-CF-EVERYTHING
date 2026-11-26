@@ -155,7 +155,7 @@ const CFG = {
   // Cách 2 (dự phòng nếu chưa có tab TABS): liệt kê tên tab hoặc gid ở đây.
   // Mọi tab vũ khí (KHÔNG có WEAPON SETS = 1723919006, tab đó dành cho trang /sets/)
   SHEETS: ['2098056846' /* RIFLE */, '953162863' /* SNIPER */, '1009811895' /* SMG */, '1975501148' /* MG */,
-           '969100198' /* SHOTGUN */, '1168502877' /* PISTOL */, '750789659' /* MELEE */, '591776108' /* THROW */],
+           '969100198' /* SHOTGUN */, '1168502877' /* PISTOL */, '750789659' /* MELEE */, '591776108' /* THROW */, '344153013' /* C4 */],
   IMG_DIR  : 'img/',
   // ---- SCOPE ----
   // Hình scope: CHỈ tìm trong weapon/img/SCOPE/ (không dùng thư mục SCOPE của trang /skin/ nữa).
@@ -170,7 +170,7 @@ const CFG = {
   SCOPE_FAMILY: false,   // true = khẩu không có scope riêng thì dùng scope chung của dòng (vd M200CheyTac_Balance2025 -> M200CheyTac_Scope)
   // Hình có thể nằm trong thư mục con của Img/ (vd Img/RIFLE/, Img/SNIPER/). Trang tự thử: thư mục trùng với cột TYPE (C) / CATEGORIZED (D)
   // của dòng đó trước, rồi thư mục gốc Img/, rồi các thư mục trong danh sách dưới đây. Thêm tên thư mục mới vào đây nếu cần.
-  IMG_SUBDIRS: ['RIFLE','SNIPER','SMG','SHOTGUN','MG','PISTOL','MELEE','GRENADE','FLASHBANG','SMOKE'],
+  IMG_SUBDIRS: ['RIFLE','SNIPER','SMG','SHOTGUN','MG','PISTOL','MELEE','GRENADE','FLASHBANG','SMOKE','C4'],
   // Vũ khí có nhiều mã ở cột B nhưng chỉ hiện HÌNH CỦA MÃ ĐẦU TIÊN, KHÔNG có nút (tên khu vực vẫn nhận theo mọi mã).
   // Ghi tên cột A hoặc 1 mã ở cột B (bỏ BUYWEAPON_INFO_), không phân biệt hoa/thường.
   // Thứ tự hiển thị (giống zaiqaq.pages.dev/clt): theo SỐ HIỆU VŨ KHÍ (WeaponIndex / _ItemIndexInBute), nhỏ trước. RELEASE_ORDER = thứ tự khu vực dùng để dò số hiệu.
@@ -180,7 +180,7 @@ const CFG = {
   SORT_BY_INDEX: false,   // true = sắp theo số hiệu vũ khí giống zaiqaq; false = thứ tự Google Sheet (như ban đầu)
   RELEASE_ORDER: ['China','Vietnam','Brazil','West','Philippines'],
   // Các vũ khí ra mắt CÙNG NGÀY xếp theo loại (cột C - TYPE) theo thứ tự này
-  TYPE_ORDER: ['RIFLE','SNIPER','SMG','MG','SHOTGUN','PISTOL','MELEE','THROW'],
+  TYPE_ORDER: ['RIFLE','SNIPER','SMG','MG','SHOTGUN','PISTOL','MELEE','THROW','C4'],
   SINGLE_IMAGE: ['Knife-Hunting', 'Knife-Hunting Blade', 'M14 EBR-QT', 'Barrett M82A1-Red Dragon'],
   // Cả dòng có cột E (gốc vũ khí) thuộc danh sách này: nếu cột B có từ 2 BUYWEAPON_INFO trở lên => chỉ hiện hình đầu, không nút (khu vực vẫn nhận diện đủ các mã)
   SINGLE_IMAGE_BASE: ['AK47-Scope'],

@@ -184,13 +184,13 @@ const CONFIG = {
   SET_SWAP: ['National League'],   // set có 1 ngoặc là khu vực: "National League (China)" => nút NGOÀI = National League, nút TRONG popup = China. 2 ngoặc: "National League (National League 2023) (China)" => ngoài 2023, trong China. Không ngoặc => có ở mọi nút trong
   SET_BUTTON_ORDER: { 'Camo': ['Desert','Woodland','Snow'], 'National League': ['League 2020','League 2022','National League','National League 15th','National League 2023'], 'Royal Guard': ['MK','Sentry','Honor Guard','Royal Guard'] },   // thứ tự nút riêng cho từng set: 'tên set': [nút 1, nút 2, ...]; ví dụ ô ghi "Camo (Snow)"
   WS_SUFFIX: ' Weapon Sets',                                 // tự thêm vào sau tên set (tên đã kết thúc bằng "Sets" thì giữ nguyên)
-  WEAPON_TABS: ['RIFLE','SNIPER','SMG','MG','SHOTGUN','PISTOL','MELEE','THROW'],   // cột A tên · B BUYWEAPON_INFO · C/D thư mục · I badge · J–V tên theo khu vực
+  WEAPON_TABS: ['RIFLE','SNIPER','SMG','MG','SHOTGUN','PISTOL','MELEE','THROW','C4'],   // cột A tên · B BUYWEAPON_INFO · C/D thư mục · I badge · J–V tên theo khu vực
   // Ảnh dùng chung thư mục của trang Weapon: .../weapon/img/<TYPE>/BUYWEAPON_INFO_<mã>.PNG
   WEAPON_BASE: location.protocol === 'file:' ? '../weapon/' : '/weapon/',
   IMG_DIR: 'img/',
   // TẤT CẢ thư mục con trong weapon\img (tên đúng như trên ổ đĩa). Thêm thư mục mới vào đây (thư mục lồng nhau ghi dạng 'RIFLE/ABC').
   // Khi chạy trên web, trang còn tự nhận mọi ảnh trong img/ (mọi thư mục) nhờ weapon/manifest.json.
-  IMG_SUBDIRS: ['RIFLE','SNIPER','SMG','SHOTGUN','MG','PISTOL','MELEE','GRENADE','FLASHBANG','SMOKE','SCOPE'],
+  IMG_SUBDIRS: ['RIFLE','SNIPER','SMG','SHOTGUN','MG','PISTOL','MELEE','GRENADE','FLASHBANG','SMOKE','SCOPE','C4'],
   IMG_PREFIX: 'BUYWEAPON_INFO',
   BADGE_DIR: 'img/badges/',                                  // file tag_<tên>.PNG
   SINGLE_IMAGE_BASE: ['AK47-Scope'],   // cột E (gốc vũ khí) thuộc danh sách: từ 2 mã trở lên => hình đầu, không nút
@@ -262,7 +262,7 @@ const cellStr = c => c == null || c.v == null ? '' : String(c.f != null && typeo
 /* Đọc tab bằng link CSV (export?format=csv&gid=...): lấy TOÀN BỘ dòng, không bị bộ lọc trong Google Sheets làm ẩn dòng.
    Không đọc được thì quay về gviz (JSONP) như cũ. */
 const TAB_GIDS = {'WEAPON SETS':'1723919006', RIFLE:'2098056846', SNIPER:'953162863', SMG:'1009811895', MG:'1975501148',
-                  SHOTGUN:'969100198', PISTOL:'1168502877', MELEE:'750789659', THROW:'591776108'};
+                  SHOTGUN:'969100198', PISTOL:'1168502877', MELEE:'750789659', THROW:'591776108', C4:'344153013'};
 function parseCSVText(t){
   const out = []; let row = [], f = '', q = false;
   for (let i = 0; i < t.length; i++){
