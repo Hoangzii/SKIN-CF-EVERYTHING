@@ -72,6 +72,8 @@
   #popbody{overflow:auto;padding:18px 20px 22px}
   #popbody.grid{display:grid;grid-template-columns:repeat(var(--cols,1),minmax(0,230px));justify-content:center;gap:14px}
   #popbody .card{width:auto}
+  #popbody.grid{grid-auto-rows:max-content;align-content:start}   /* hàng cao theo thẻ, popup cuộn được (Noble Gold, VVIP...) */
+  #popbody .card{flex:none}
   #popbody .name{font-size:11px}
   #popbody .noimg{font-size:10px}
 
@@ -1170,7 +1172,7 @@ async function init(){
           subs = subs.map((u, i) => ({u, i})).sort((a, b) => pos(a.u) - pos(b.u) || (pos(a.u) === REG_ORDER.length ? String(a.u.name).localeCompare(String(b.u.name), 'en', {numeric: true, sensitivity: 'base'}) : a.i - b.i)).map(x => x.u); }
         return {name: g.name,
           members: toMembers([...base, ...subs.flatMap(u => u.ws)].filter((w, i, a) => a.indexOf(w) === i)),
-          subs: subs.map(u => ({name: u.name, members: toMembers([...base, ...u.ws.filter(w => !base.includes(w))])}))};
+          subs: subs.map(u => ({name: u.name, members: toMembers([...u.ws, ...base.filter(w => !u.ws.includes(w))])}))};   // vũ khí ghi riêng khu vực (China / World...) trước, vũ khí dùng chung (không ghi) xếp sau cùng
       });
       s.members = s.regions.length ? s.regions[0].members : toMembers(s.common);
       s.cur = s.regions.length ? s.regions[0].name : '';
