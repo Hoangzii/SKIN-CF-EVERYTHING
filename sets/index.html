@@ -78,6 +78,19 @@
   #popbody .noimg{font-size:10px}
 
   /* ---------- popup chi tiết vũ khí (giống trang /weapon/) ---------- */
+  /* nút SCOPE + cửa sổ xem scope (giống trang Weapon) */
+  .scopebtn{position:absolute;right:-2px;bottom:6px;z-index:2;font:600 10px/1 'Lexend',sans-serif;padding:4px 9px;border:1px solid #8fa0cf;border-radius:3px;background:#2c3e75;color:#fff;letter-spacing:.4px;cursor:pointer}
+  .scopebtn:hover{background:#3b52a0}
+  #dpop .dbox{position:relative}
+  #scmodal{position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.65);display:none;align-items:center;justify-content:center}
+  #scmodal.on{display:flex}
+  #scmodal .box{position:relative;width:min(800px,92vw,calc(80vh*4/3));aspect-ratio:4/3;background:#000}
+  #scmodal .box img{width:100%;height:100%;object-fit:contain;display:block}
+  #scmodal .mtg{position:absolute;left:0;right:0;top:100%;margin-top:10px;display:flex;gap:6px;justify-content:center}
+  #scmodal .mtg:empty{display:none}
+  #scmodal .mtg button{min-width:34px;padding:4px 10px;border:1px solid #8fa0cf;border-radius:3px;background:#2c3e75;color:#fff;font-weight:600;cursor:pointer}
+  #scmodal .mtg button.on{background:#fbdf89;color:#111;border-color:#fbdf89}
+  #scmodal .x{position:absolute;top:-38px;right:-2px;color:#fff;font:700 26px/1 'Lexend',sans-serif;cursor:pointer;user-select:none}
   #doverlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:200;padding:16px}
   #doverlay.open{display:flex}
   #dpop,#dpop *{font-family:'Lexend',system-ui,sans-serif;font-weight:700}
@@ -144,6 +157,7 @@
 </div></div>
 
 <!-- popup chi tiết vũ khí: giống popup của https://hoangzii.pages.dev/weapon/ -->
+<div id="scmodal"><div class="box"><div id="scimg"></div><span class="x" id="scx">X</span><div class="mtg" id="sctg"></div></div></div>
 <div id="doverlay"><div id="dpop">
   <div class="dhead" id="dtitle"></div>
   <button id="dclose" type="button" aria-label="Đóng">&times;</button>
@@ -180,7 +194,7 @@ const CONFIG = {
   IMG_PREFIX: 'BUYWEAPON_INFO',
   BADGE_DIR: 'img/badges/',                                  // file tag_<tên>.PNG
   SINGLE_IMAGE_BASE: ['AK47-Scope'],   // cột E (gốc vũ khí) thuộc danh sách: từ 2 mã trở lên => hình đầu, không nút
-  SINGLE_IMAGE: ['Knife-Hunting', 'Knife-Hunting Blade', 'M14 EBR-QT'],   // tên cột A hoặc mã: chỉ hiện hình mã đầu tiên, không có nút (giống trang Weapon)
+  SINGLE_IMAGE: ['Knife-Hunting', 'Knife-Hunting Blade', 'M14 EBR-QT', 'Barrett M82A1-Red Dragon'],   // tên cột A hoặc mã: chỉ hiện hình mã đầu tiên, không có nút (giống trang Weapon)
   BADGE_POPUP_ONLY: ['slug'],                                // thẻ chỉ hiện trong popup chi tiết
   BADGE_ALIAS: { slug: 'slugammo14' },                       // ghi "Slug" ở cột BADGES => tag_slugammo14.png (giống trang Weapon)
   EXCLUDE_TOKENS: ['NM'],                                    // mã có đoạn này (vd ..._10th_NM) không được lấy khi khớp theo TỪ KHOÁ (ghi mã đầy đủ thì vẫn lấy)
@@ -383,8 +397,15 @@ const AUTO_SYN = [['withoutthelogo','nm'],['withoutlogo','nm'],['nomark','nm'],[
 const AUTO_NORM = s => AUTO_SYN.reduce((t, [a, b]) => t.split(a).join(b), String(s || '').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ''));
 const AUTO_BLANK = /^[\s\-–—]+$/;
 
+/* Mã cột B chỉ khác dữ liệu BF005/ITEMCFT ở dấu '-' / '_' (vd GRENADE-QT_NoMark: Vietnam ghi "-", Brazil/West/Philippines ghi "_") => coi là cùng mã */
+const _dashV = c => { const u = c.replace(/-/g, '_'); return u === c ? [c] : [c, u]; };
+function _dashAlias(data){
+  if (!data || data.__dash) return; data.__dash = true;
+  ['icon', 'code', 'bfname'].forEach(t => Object.values(data[t] || {}).forEach(m => Object.keys(m).forEach(k => { const u = k.replace(/-/g, '_'); if (u !== k && !m[u]) m[u] = m[k]; })));
+}
 function autoFillRegions(headers, rows, data, opt) {
   opt = opt || {};
+  _dashAlias(data);
   const from = opt.from, to = opt.to, nameCol = opt.nameCol || 0, imgCol = opt.imgCol == null ? 1 : opt.imgCol;
   const regs = (data && data.regions) || {};
   // cột khu vực nào có dữ liệu CSV
@@ -407,10 +428,15 @@ function autoFillRegions(headers, rows, data, opt) {
   const val = (row, i) => String(row[i] == null ? '' : row[i]).replace(/[̵̶]/g, '').trim();
 
   // 1) tìm mã cho từng dòng
-  const _codesOf = row => String(row[imgCol] || '').split(/[,;\n|]+/).map(t => t.trim().replace(/\.(png|jpe?g|webp)$/i, '').replace(/^.*?BUYWEAPON_INFO_/i, '').toLowerCase()).filter(Boolean);
+  const _codesOf = row => String(row[imgCol] || '').split(/[,;\n|]+/).map(t => t.trim().replace(/\.(png|jpe?g|webp)$/i, '').replace(/^.*?BUYWEAPON_INFO_/i, '').toLowerCase()).filter(Boolean).flatMap(_dashV);
+  /* mã có đuôi khu vực (vd LuckyGrenade_VN, AK47-Halloween_WEBR): mã đầy đủ không có trong dữ liệu => dùng mã gốc cho đúng khu vực ở đuôi */
+  const _RC = { China: 'cn', Vietnam: 'vn', Brazil: 'br', West: 'we', Philippines: 'ph' };
+  const _sfx = (r, c) => { const sm = c.match(/^(.+?)_((?:cn|vn|br|we|ph)+|w)$/); return sm && _RC[r] && (sm[2] === 'w' ? ['we'] : sm[2].match(/../g)).includes(_RC[r]) ? sm[1] : null; };   // đuôi _W = West
+  const _hasIn0 = (r, c) => !!((data.icon && data.icon[r] && data.icon[r][c]) || (data.code && data.code[r] && data.code[r][c]) || (data.bfname && data.bfname[r] && data.bfname[r][c]));
+  const _hasInS = (r, c) => _hasIn0(r, c) || (!_hasIn0(r, c) && !!_sfx(r, c) && _hasIn0(r, _sfx(r, c)));
   const _hasIn = (r, c) => !!((data.icon && data.icon[r] && data.icon[r][c]) || (data.code && data.code[r] && data.code[r][c]) || (data.bfname && data.bfname[r] && data.bfname[r][c]));
   const _has = c => cols.some(({ r }) => (data.icon && data.icon[r] && data.icon[r][c]) || (data.code && data.code[r] && data.code[r][c]) || (data.bfname && data.bfname[r] && data.bfname[r][c]));
-  const inData = (data.icon || data.code) ? (row => { const cs = _codesOf(row); return !cs.length || cs.some(c => _has(c) || _has(c.replace(/_nm$/, ''))); }) : null;
+  const inData = (data.icon || data.code) ? (row => { const cs = _codesOf(row); return !cs.length || cs.some(c => _has(c) || _has(c.replace(/_nm$/, '')) || cols.some(({ r }) => _hasInS(r, c))); }) : null;
   const info = rows.map(row => {
     const score = new Map(), add = (k, w) => score.set(k, (score.get(k) || 0) + w);
     const ev = new Map(), mark = (k, r) => { if (!ev.has(k)) ev.set(k, new Set()); ev.get(k).add(r) };   // khu vực nào đã khớp với mã k
@@ -423,14 +449,14 @@ function autoFillRegions(headers, rows, data, opt) {
       if (hit) hit.forEach(k => { add(k, 3); mark(k, r) });   // tên đã ghi trong Sheet: tín hiệu mạnh nhất
     }
     // BF005: mã cột B = BigIconName / StandardName -> WeaponIndex (chính xác nhất, theo từng khu vực)
-    const icon = new Map(), codesB = String(row[imgCol] || '').split(/[,;\n|]+/).map(t => t.trim().replace(/\.(png|jpe?g|webp)$/i, '').replace(/^.*?BUYWEAPON_INFO_/i, '').toLowerCase()).filter(Boolean);
+    const icon = new Map(), codesB = String(row[imgCol] || '').split(/[,;\n|]+/).map(t => t.trim().replace(/\.(png|jpe?g|webp)$/i, '').replace(/^.*?BUYWEAPON_INFO_/i, '').toLowerCase()).filter(Boolean).flatMap(_dashV);
     for (const { r } of cols) {
       const m = data.icon && data.icon[r]; if (!m) continue;
       const ks = new Set(); codesB.forEach(c => (m[c] || []).forEach(k => ks.add(k)));
       // mã có đuôi khu vực (vd AK47-Halloween_WEBR = bản West + Brazil): mã này không có trong BF005 của KHU VỰC NÀO thì dùng mã gốc,
       // chỉ cho đúng khu vực ghi ở đuôi (mã có ở 1 khu vực, vd Wukong_..._BR = màu Brown, thì không áp dụng)
       if (!ks.size && !codesB.some(c => cols.some(({ r: q }) => data.icon && data.icon[q] && data.icon[q][c]))) codesB.forEach(c => {
-        const sm = c.match(/^(.+?)_((?:cn|vn|br|we|ph)+)$/); if (!sm) return;
+        const sm = c.match(/^(.+?)_((?:cn|vn|br|we|ph)+|w)$/); if (!sm) return; if (sm[2] === 'w') sm[2] = 'we';
         const rc = { China: 'cn', Vietnam: 'vn', Brazil: 'br', West: 'we', Philippines: 'ph' }[r];
         if (rc && sm[2].match(/../g).includes(rc)) (m[sm[1]] || []).forEach(k => ks.add(k));
       });
@@ -485,7 +511,7 @@ function autoFillRegions(headers, rows, data, opt) {
     const grp = groups.get(find(n));
     for (const { i, r } of cols) {
       if (val(row, i) || x.blocked.has(i)) continue;
-      if (AUTO_STRICT && inData && _codesOf(row).length && !_codesOf(row).some(c => _hasIn(r, c) || _hasIn(r, c.replace(/_nm$/, '')))) continue;   // mã không có trong BF005 / mã nội bộ của KHU VỰC NÀY => bỏ qua khu vực này
+      if (AUTO_STRICT && inData && _codesOf(row).length && !_codesOf(row).some(c => _hasIn(r, c) || _hasIn(r, c.replace(/_nm$/, '')) || _hasInS(r, c))) continue;   // mã không có trong BF005 / mã nội bộ của KHU VỰC NÀY => bỏ qua khu vực này
       if (grp.length > 1 && !x.icon.has(r)) {   // có khớp BF005 ở khu vực này thì điền luôn, không nhường cho dòng anh em (_NM)
         if (grp.some(m => m !== n && (val(rows[m], i) || info[m].blocked.has(i)))) continue;   // dòng anh em đã có tên khu vực này
         const isNM = m => /_nm(\b|_|$)/i.test(String(rows[m][imgCol] || ''));
@@ -646,9 +672,16 @@ window.__fb = img => {
   }
   else img.replaceWith(Object.assign(document.createElement('span'), {className: 'noimg', textContent: 'no image'}));
 };
+function dashAlts(list){   // tên file khác mã chỉ ở dấu '-' / '_' (vd GRENADE-QT_NoMark <-> GRENADE_QT_NoMark)
+  const out = [];
+  list.forEach(u => { const i = u.lastIndexOf('/') + 1, dir = u.slice(0, i), f = u.slice(i), m = f.match(/^(BUYWEAPON_INFO_)?(.*)$/i);
+    [m[2].replace(/-/g, '_'), m[2].replace(/_/g, '-')].forEach(x => { const v = dir + (m[1] || '') + x; if (v !== u && !list.includes(v) && !out.includes(v)) out.push(v); }); });
+  return out;
+}
 function imgTag(code, hints){
-  const list = imgList(code, hints);
-  if (!list.length) return '<span class="noimg">no image</span>';
+  const list0 = imgList(code, hints);
+  if (!list0.length) return '<span class="noimg">no image</span>';
+  const list = list0.concat(dashAlts(list0));   // thêm bản đổi dấu '-' / '_' (thử sau cùng)
   const [first, ...rest] = list;
   return `<img class="w" loading="lazy" src="${attr(first)}" alt="" data-alts="${attr(JSON.stringify(rest))}" onerror="__fb(this)">`;
 }
@@ -671,6 +704,11 @@ function badgesTag(list, cls){
 /* ---------------- nhãn nút biến thể (luật của trang Weapon) ---------------- */
 const baseOf = c => { let n = String(c || '').split(/[\\/]/).pop().trim().replace(/\.(png|jpg|jpeg|webp)$/i, ''); if (!n.toUpperCase().startsWith(CONFIG.IMG_PREFIX)) n = CONFIG.IMG_PREFIX + '_' + n; return n; };
 function tmpLabels(name, bases){   // Steyr TMP 3-4 mã: Normal, Dual, Mutation[, Charged] (mã thứ 3 là AWM/Charge => Charged)
+  if(bases.length>1&&bases.every(b=>/smoke_divide/i.test(b)))return bases.map(b=>/_(changemode|chg)$/i.test(b)?'Unstacked':'Stacked');   // Smoke Grenade-Divide: Smoke_Divide = Stacked, _ChangeMode = Unstacked
+  if(bases.length>1&&bases.every(b=>/wallsmoke/i.test(b)))return bases.map(b=>/_(chg|changemode)$/i.test(b)?'Vertical':'Horizontal');   // Wall Smoke Grenade: WallSmoke = Horizontal, WallSmoke_Chg = Vertical
+  if(bases.length>1&&bases.every(b=>/(^|_)sohg/i.test(b)))return bases.map(b=>/_(changemode|chg)$/i.test(b)?'Unstacked':'Stacked');   // SOHG: mã thường = Stacked, mã _ChangeMode / _Chg = Unstacked
+  if(bases.length>1&&bases.some(b=>/astronaut$/i.test(b))&&!/raging\s*bull/i.test(name||''))return bases.map(b=>/astronaut$/i.test(b)?'Astronaut':'Default');   // mã đuôi _Astronaut (vd Grenade_Freeze_Astronaut) = Astronaut, mã còn lại = Default
+  if(bases.length>1&&bases.every(b=>/\d+(st|nd|rd|th)anniversary$/i.test(b)))return bases.map(b=>b.match(/(\d+(?:st|nd|rd|th))anniversary$/i)[1].toLowerCase());   // Grenade-Anniversary: ..._2ndAnniversary, _6thAnniversary, _7thAnniversary => 2nd, 6th, 7th (theo thứ tự cột B)
   if(bases.length>1&&bases.every(b=>/guanxiaoyu(bl|gr)$/i.test(b)))return bases.map(b=>/bl$/i.test(b)?'Black List':'Global Risk');   // Umbrella-Guan Xiaoyu: ...BL = Black List, ...GR = Global Risk
   if(/plasma\s*knife/i.test(name||'')&&bases.length===2)return ['PVP','PVE'];   // Plasma Knife (2 mã): PVP, PVE theo thứ tự cột B
   if(bases.length===2&&/gatlinggun1$/i.test(bases[0])&&/gatlinggun2$/i.test(bases[1]))return ['Green','Purple'];   // Gatling Gun-Halloween: GatlingGun1 = Green, GatlingGun2 = Purple
@@ -974,8 +1012,61 @@ function memberCard(m, i){
     for (let k = 0; k < labels.length; k += 5) rows.push('<div class="rrow">' + labels.slice(k, k + 5).map((l, j) => btn(l, k + j)).join('') + '</div>');
     vs = `<div class="rsel${labels.length > 5 ? ' multi' : ''}">${rows.join('')}</div>`;
   }
-  return `<div class="card item" data-k="${i}"${m.probe ? ' data-probe="1"' : ''}><div class="thumb">${imgTag(v.alts || v.code, info.hints)}${badgesTag(cardBadges(info.badges))}</div>${vs}<div class="name">${html(info.name)}</div></div>`;
+  return `<div class="card item" data-k="${i}"${m.probe ? ' data-probe="1"' : ''}><div class="thumb">${imgTag(v.alts || v.code, info.hints)}${badgesTag(cardBadges(info.badges))}${scopeBtnW(v.w)}</div>${vs}<div class="name">${html(info.name)}</div></div>`;
 }
+/* ---------------- SCOPE (giống trang Weapon): hình trong weapon/img/SCOPE/<tên>_Scope.png ----------------
+   Cột SCOPE ghi tay => dùng đúng tên đó; trống => mã cột B + _Scope / _Scope2 / _Scope_2. Có hình mới hiện nút SCOPE. */
+const SC_SUF = ['_Scope', '_Scope2', '_Scope_2'];
+const scBase = x => x.replace(/\.(png|jpg|jpeg|webp)$/i, '').replace(/_Scope(_?\d+)?$/i, '');
+function scopeGroups(w){
+  const strip = x => x.replace(/\.(png|jpg|jpeg|webp)$/i, '');
+  const G = [], seen = new Set(), add = g => { g = g.filter(x => { const k = x.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; }); if (g.length) G.push(g); };
+  const f = w.scopeF.split(/[,;\n|]+/).map(x => x.trim()).filter(Boolean);
+  if (f.length){ add(f.flatMap(x => [strip(x), ...SC_SUF.map(sf => scBase(x) + sf)])); return G; }
+  [...new Set(w.codes.map(c => strip(String(c).split(/[\\/]/).pop()).replace(/^.*?BUYWEAPON_INFO_/i, '')).filter(Boolean))].forEach(c => add(SC_SUF.map(sf => c + sf)));
+  return G;
+}
+const SC_CACHE = new Map();
+function scFind(name){
+  const key = name.toLowerCase();
+  if (SC_CACHE.has(key)) return SC_CACHE.get(key);
+  const rel = 'img/SCOPE/' + encodeURIComponent(name) + '.png';
+  const p = (async () => {
+    const hasMan = Object.keys(MAN).length > 0;
+    if (hasMan){ const k = MAN[decodeURIComponent(rel).toLowerCase()]; return k ? CONFIG.WEAPON_BASE + k : ''; }   // web: tra manifest.json
+    const u = CONFIG.WEAPON_BASE + rel;                                                                          // máy: thử tải hình
+    return await new Promise(res => { const im = new Image(); im.onload = () => res(u); im.onerror = () => res(''); im.src = u; });
+  })();
+  SC_CACHE.set(key, p); return p;
+}
+async function scopeOfW(w){
+  if (!w) return [];
+  if (!w._sc) w._sc = (async () => { for (const g of scopeGroups(w)){ const f = (await Promise.all(g.map(scFind))).filter(Boolean); if (f.length) return f; } return []; })();
+  return w._sc;
+}
+const scopeBtnW = w => w ? `<button type="button" class="scopebtn" data-w="${WEAPONS.indexOf(w)}" hidden>SCOPE</button>` : '';
+function fillScopes(box){
+  (box || document).querySelectorAll('.scopebtn[hidden][data-w]').forEach(async b => {
+    const list = await scopeOfW(WEAPONS[+b.dataset.w]);
+    if (list.length && b.isConnected){ b.dataset.s = JSON.stringify(list); b.hidden = false; }
+  });
+}
+function openScope(list){
+  const show = k => { $('scimg').innerHTML = `<img src="${attr(list[k])}" alt="scope">`; $('sctg').querySelectorAll('button').forEach((b, j) => b.classList.toggle('on', j === k)); };
+  $('sctg').innerHTML = list.length > 1 ? list.map((_, k) => `<button type="button" data-k="${k}">${k + 1}</button>`).join('') : '';
+  $('sctg').onclick = e => { const b = e.target.closest('button'); if (b) show(+b.dataset.k); };
+  show(0);
+  $('scmodal').classList.add('on');
+}
+const closeScope = () => { $('scmodal').classList.remove('on'); $('scimg').innerHTML = ''; $('sctg').innerHTML = ''; };
+$('scx').onclick = closeScope;
+$('scmodal').addEventListener('click', e => { if (e.target === $('scmodal')) closeScope(); });
+document.addEventListener('click', e => {                     // bấm nút SCOPE (trong popup set hoặc popup chi tiết)
+  const sb = e.target.closest('.scopebtn');
+  if (!sb) return;
+  e.stopPropagation(); e.preventDefault();
+  if (sb.dataset.s) openScope(JSON.parse(sb.dataset.s));
+}, true);
 function renderPop(){
   const set = popSet;
   $('poptitle').textContent = set.name;
@@ -993,6 +1084,7 @@ function renderPop(){
   $('popbody').style.setProperty('--cols', Math.max(1, Math.min(6, popMembers.length)));
   $('popbody').innerHTML = popMembers.map(memberCard).join('') || '<div class="noimg" style="padding:20px">Chưa có vũ khí nào khớp với set này.</div>';
   fitRegions($('popbody'));
+  fillScopes($('popbody'));
 }
 $('pregions').onclick = e => {
   const b = e.target.closest('.rbtn');
@@ -1009,12 +1101,20 @@ $('popbody').addEventListener('click', e => {
     m.vi = +b.dataset.v;
     it.outerHTML = memberCard(m, i);
     fitRegions($('popbody').querySelector(`.item[data-k="${i}"]`));
+    fillScopes($('popbody'));
     return;
   }
   openDetail(i);
 });
 
 /* ---------------- popup chi tiết vũ khí (giống trang Weapon) ---------------- */
+/* System Name: mã có đuôi khu vực thêm tay để khỏi trùng tên file (vd LuckyGrenade_VN) mà không có trong ITEMCFT/BF005 => hiện mã gốc (LuckyGrenade) */
+function sysName(c, D){
+  const z = String(c).toLowerCase(), sm = String(c).match(/^(.+?)_((?:cn|vn|br|we|ph)+|w)$/i);
+  if (!sm || !D) return c;
+  const has = k => Object.keys(D.regions || {}).some(r => (D.icon && D.icon[r] && D.icon[r][k]) || (D.code && D.code[r] && D.code[r][k]) || (D.bfname && D.bfname[r] && D.bfname[r][k]));
+  return !has(z) && has(sm[1].toLowerCase()) ? sm[1] : c;
+}
 function openDetail(i){
   const m = popMembers[i];
   if (!m) return;
@@ -1034,9 +1134,10 @@ function openDetail(i){
     /* cột P–W: ô có Removed (gạch ngang) => thêm khu vực đó bên dưới 5 khu vực chính, theo thứ tự cột */
     info.regions.filter(r => r.idx >= CONFIG.CLOSED_FROM && r.html && !CONFIG.POPUP_REGIONS.some(n => norm(n) === norm(r.label).trim()))
       .map(r => `<tr class="rm"><td>${html(r.label)}</td><td class="sep">|</td><td>${r.html}</td></tr>`).join('') + '</table>';
-    $('dimg').innerHTML = imgTag(v.alts || v.code, info.hints);
+    $('dimg').innerHTML = imgTag(v.alts || v.code, info.hints) + scopeBtnW(v.w);
+    fillScopes($('dimg'));
     $('dvars').innerHTML = labels.map((l, k) => `<button type="button" class="vbtn${k === cur ? ' on' : ''}" data-v="${k}">${html(l)}</button>`).join('');
-    const names = codes.map(c => html(rawCode(c)));
+    const names = codes.map(c => html(sysName(rawCode(c), window.REGIONS_DATA)));
     const note = [...new Set(m.vars.map(x => x.w && x.w.note).filter(Boolean))].map(html).join('<br>');
     $('dcodes').innerHTML = '<span class="lb">System Name:</span>' + (note ? ' ' + note : names.length > 1 ? '<br>' + names.join('<br>') : ' ' + (names[0] || '(no image name)'));   // có câu ghi chú => hiện thay cho mã
   };
@@ -1052,7 +1153,7 @@ $('close').onclick = closePop;
 $('overlay').onclick = e => { if (e.target === $('overlay')) closePop(); };
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
-  if ($('doverlay').classList.contains('open')) closeDetail(); else closePop();
+  if ($('scmodal').classList.contains('on')) closeScope(); else if ($('doverlay').classList.contains('open')) closeDetail(); else closePop();
 });
 $('search').oninput = renderList;
 $('go').onclick = renderList;
@@ -1084,7 +1185,9 @@ async function init(){
         codes: splitCodes(r[1]).filter(c => !(/\s/.test(c) && !/BUYWEAPON_INFO/i.test(c))),   // cột B = BUYWEAPON_INFO (bỏ câu ghi chú)
         note: String(r[1] || '').split(/[;\n|]+/).map(t => t.trim()).filter(t => /\s/.test(t) && !/BUYWEAPON_INFO/i.test(t)).join(' '),   // câu ghi chú, vd "This weapon does not exist in CrossFire."
         base: String(r[4] || '').trim(),               // cột E: gốc vũ khí
-        figurine: [r[6], r[7]].some(x => /figurine/i.test(String(x || ''))),   // cột CLASS = FIGURINE
+        scopeF: String(r[5] || '').trim(),             // cột SCOPE (ghi tay tên hình scope)
+        figurine: [r[6], r[7]].some(x => /figurine/i.test(String(x || ''))),
+        cls2: String(r[7] || '').trim().toUpperCase(),   // cột CLASS thứ 2: VVIP / NON-VVIP   // cột CLASS = FIGURINE
         hints: [r[2], r[3]],                           // cột C / D: gợi ý thư mục ảnh
         badges: splitBadges(r[badgeCol]),
         sets: parseWS(r.wsets),                        // cột WEAPON SETS
@@ -1111,7 +1214,7 @@ async function init(){
       if (!w.codes.length) return;                         // dòng chưa có BUYWEAPON_INFO => chưa hiển thị
       /* SET_SWAP: đảo 2 tầng nút. "National League (China) (National League 2023)" => nút ngoài = National League 2023, nút trong popup = China;
          "National League (China)" (không ghi phiên bản) => nút ngoài = National League, nút trong = China */
-      if (e.region && !e.sub && isSwap(key)) e = Object.assign({}, e, {region: e.base.trim(), sub: e.region});
+      if (e.region && !e.sub && isSwap(key) && isRegName(e.region)) e = Object.assign({}, e, {region: e.base.trim(), sub: e.region});
       let list = st.common;
       if (e.region){
         let g = st.regs.find(x => norm(x.name) === norm(e.region));
@@ -1131,7 +1234,7 @@ async function init(){
       ws.forEach(w => {
         const m = toVars(memberOf(w, w.codes[0], w.codes));
         const ks = m.vars.map(v => normCode(v.code)).filter(Boolean);
-        if (!out.some(x => x.vars.some(v => ks.includes(normCode(v.code))))) out.push(m);   // nhiều dòng biến thể => 1 thẻ
+        if (!out.some(x => (x.w && x.w.cls2) === w.cls2 && x.vars.some(v => ks.includes(normCode(v.code))))) out.push(m);   // nhiều dòng biến thể => 1 thẻ; cùng mã nhưng khác VVIP / NON-VVIP => 2 thẻ riêng
       });
       out.sort((x, y) => (+!!(x.w && x.w.figurine)) - (+!!(y.w && y.w.figurine)));   // trong popup: vũ khí trước, Figurine sau (giữ thứ tự cũ trong mỗi nhóm)
       return out;
